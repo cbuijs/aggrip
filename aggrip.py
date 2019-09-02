@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 '''
 =======================================================================
- aggrip.py v0.01-20190902 Copyright 2019 by cbuijs@chrisbuijs.com
+ aggrip.py v0.03-20190902 Copyright 2019 by cbuijs@chrisbuijs.com
 =======================================================================
 
  Aggregate IP list
@@ -18,6 +18,9 @@ import regex
 # Use module PyTricia for CIDR/Subnet stuff
 import pytricia
 
+# Use IPSet from IPy to aggregate
+from IPy import IP, IPSet
+
 # Lists
 lip4 = pytricia.PyTricia(32, socket.AF_INET)
 lip6 = pytricia.PyTricia(128, socket.AF_INET6)
@@ -31,20 +34,18 @@ is_ip = regex.compile('^(' + ip_rx4 + '|' + ip_rx6 + ')$', regex.I)
 
 ######################################################################
 
-def agg(iplist, ip6):
-    if ip6:
-        piplist = pytricia.PyTricia(128, socket.AF_INET6)
-    else:
-        piplist = pytricia.PyTricia(32, socket.AF_INET)
-
+def agg(iplist):
+    ips = list()
     for ip in iplist:
-        pip = iplist.get_key(ip)
-        if pip not in piplist:
-            if pip != ip:
-                logging.info('Aggregrated {0} -> {1}'.format(ip, pip))
-            piplist[pip] = pip
+        ips.append(IP(ip))
 
-    return piplist.keys()
+    ipset = IPSet(ips) # Here is the magic
+
+    newlist = list()
+    for ip in ipset:
+        newlist.append(ip.strNormal(1))
+
+    return newlist
 
 ######################################################################
 
@@ -57,8 +58,8 @@ if __name__ == '__main__':
         elif is_ip6.search(line):
             lip6[line] = line
 
-    for line in agg(lip4, False) + agg(lip6, True):
+    for line in agg(lip4) + agg(lip6):
         sys.stdout.write(line + '\n')
 
 sys.exit(0)
-	
+
