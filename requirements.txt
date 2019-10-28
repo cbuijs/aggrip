@@ -1,2 +1,2 @@
-pytricia>=1.0.0
-regex>=2018.2.21
+netaddr>=0.7.19        
+regex>=2019.6.8      
