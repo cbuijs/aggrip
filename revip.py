@@ -1,7 +1,7 @@
 #!/usr/bin/env python2
 '''
 =========================================================================
- revip.py v0.01-20240709 Copyright 2019-2024 by cbuijs@chrisbuijs.com
+ revip.py v0.02-20240709 Copyright 2019-2024 by cbuijs@chrisbuijs.com
 =========================================================================
 
  Aggregate IP list
@@ -54,7 +54,7 @@ def expand_ip(ip):
     if new_ip.startswith(':'):
         new_ip = '0' + new_ip
 
-    prefix = 128
+    prefix = '128'
     if '/' in new_ip:
         new_ip, prefix = new_ip.split('/')[0:2]
         if new_ip.endswith(':'):
