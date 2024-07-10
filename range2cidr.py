@@ -4,7 +4,7 @@
  range2cidr.py v0.10-20240709 Copyright 2019-2024 by cbuijs@chrisbuijs.com
 ===========================================================================
 
- Aggregate IP list
+ Aggregate IP-Range list and convert to CIDR
 
 ===========================================================================
 '''

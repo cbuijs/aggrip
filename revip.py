@@ -2,10 +2,12 @@
 
 '''
 =========================================================================
-revip.py v0.02-20240709
-Copyright 2019-2024 by cbuijs@chrisbuijs.com
+ revip.py v0.02-20240709
+ Copyright 2019-2024 by cbuijs@chrisbuijs.com
 =========================================================================
-Aggregate IP list
+
+ Genereate reverse DNS names from IP-Addresses
+
 =========================================================================
 '''
 
