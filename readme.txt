@@ -16,3 +16,6 @@ Convert an IP-Address/CIDR list into reverse in-addr/ip6.arpa syntax DNS names.
 undup.py
 Unduplicate DNS domain-list by removing unneeded sub-domains when parent domain exists.
 
+
+NOTE: The tools do not accept any command-line parameters, just pipe data into them like "cat file.txt | ./aggrip.py".
+
