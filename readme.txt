@@ -11,3 +11,7 @@ Convert/Aggregate IP-Ranges ilist (like 192.168.1.0-192.168.1.255 syntax) into a
 
 revip.py
 Convert an IP-Address/CIDR list into reverse in-addr/ip6.arpa syntax DNS names.
+
+
+undup.py
+Unduplicate DNS domain-list by removing unneeded sub-domains when parent domain exists.
