@@ -17,6 +17,10 @@ undup.py
 Unduplicate DNS domain-list by removing unneeded sub-domains when parent domain exists.
 
 
+domsort.py
+Sort domain-list from root down (tree wise).
+
+
 ====== NOTE:
 The tools do not accept any command-line parameters, just pipe data into them like:
 
