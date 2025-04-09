@@ -1,5 +1,6 @@
 
-Some IP-Address based tools.
+Some IP-Address and DNS domainname based tools.
+
 
 aggrip.py
 Aggregate IP-Addresses/CIDR list into a CIDR based list
