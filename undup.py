@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 '''
 ==========================================================================
- undup.py v0.01-20241201 Copyright 2019-2024 by cbuijs@chrisbuijs.com
+ undup.py v0.02-20251020 Copyright 2019-2025 by cbuijs@chrisbuijs.com
 ==========================================================================
 
  Undup DNS Domainlist (Remove sub-domains)
@@ -29,7 +29,7 @@ is_dom = regex.compile(dom_rx, regex.I)
 #########################################################################
 
 def nice_dom(dom):
-    dom = dom.strip().lower()
+    dom = dom.strip().strip('.').lower()
     if is_dom.search(dom):
         return str(dom)
     return None
@@ -48,7 +48,7 @@ if __name__ == '__main__':
     undupped = set()
 
     for domain in doms:
-        parent_domain = '.' + domain.strip('.')
+        parent_domain = '.' + domain
         if not domain.endswith(parent):
             parent = parent_domain
             sys.stdout.write('{0}\n'.format(domain))
