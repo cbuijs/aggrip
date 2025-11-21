@@ -1,56 +1,52 @@
 #!/usr/bin/env python3
 '''
 ==========================================================================
- undup.py v0.02-20251020 Copyright 2019-2025 by cbuijs@chrisbuijs.com
+ undup.py v0.03-20251121 Copyright 2019-2025 by cbuijs@chrisbuijs.com
 ==========================================================================
 
- Undup DNS Domainlist (Remove sub-domains)
+ Undup DNS Domainlist (Remove sub-domains when parent exists)
 
 ==========================================================================
 '''
 
-# Standard Stuff
-import sys, socket
+import sys, re
 
-# Regex
-import regex
+is_dom = re.compile(r'^[a-zA-Z0-9.-]+$')
 
-# Netaddr/IPy
-from IPy import IP
-import netaddr
+def main():
+    seen = set()
+    processed_list = []
+    write = sys.stdout.write
 
-# Lists
-doms = list()
+    for line in sys.stdin:
+        dom = line.strip().lower().strip('.')
+        
+        if not dom or dom in seen:
+            continue
+        
+        if is_dom.match(dom):
+            seen.add(dom)
+            processed_list.append((dom[::-1], dom))
 
-# IP Regexes
-dom_rx = '^[a-zA-Z0-9\.\-]+$'
-is_dom = regex.compile(dom_rx, regex.I)
+    if not processed_list:
+        sys.exit(0)
 
-#########################################################################
+    processed_list.sort()
+    last_rev = ''
+    
+    for rev_dom, original_dom in processed_list:
+        if last_rev and rev_dom.startswith(last_rev + '.'):
+            continue
 
-def nice_dom(dom):
-    dom = dom.strip().strip('.').lower()
-    if is_dom.search(dom):
-        return str(dom)
-    return None
-
-
-def dom_sort(domlist):
-    unique_domains = set(domlist)
-    sorted_domains = sorted(unique_domains, key=lambda domain: domain.split('.')[::-1])
-    return list(sorted_domains)
-
+        write(f'{original_dom}\n')
+        last_rev = rev_dom
 
 if __name__ == '__main__':
-    doms = dom_sort(list(filter(None, map(nice_dom, sys.stdin))))
+    try:
+        main()
 
-    parent = '.invalid'
-    undupped = set()
-
-    for domain in doms:
-        parent_domain = '.' + domain
-        if not domain.endswith(parent):
-            parent = parent_domain
-            sys.stdout.write('{0}\n'.format(domain))
+    except KeyboardInterrupt:
+        sys.exit(0)
 
 sys.exit(0)
+

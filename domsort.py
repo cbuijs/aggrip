@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 '''
 ==========================================================================
- domsort.py v0.01-20200409 Copyright 2019-2024 by cbuijs@chrisbuijs.com
+ domsort.py v0.02-20251121 Copyright 2019-2025 by cbuijs@chrisbuijs.com
 ==========================================================================
 
  Domain-List Sorter
@@ -9,11 +9,11 @@
 ==========================================================================
 '''
 
-from fileinput import input
 import sys
 
-for y in sorted([x.strip().split('.')[::-1] for x in input()]):
-    print('.'.join(y[::-1]))
+unique_data = {line.strip().lower() for line in sys.stdin if line.strip()}
+sorted_data = sorted(unique_data, key=lambda s: s.split('.')[::-1])
+sys.stdout.write('\n'.join(sorted_data) + '\n')
 
 sys.exit(0)
 

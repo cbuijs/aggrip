@@ -14,8 +14,9 @@ revip.py
 Convert an IP-Address/CIDR list into reverse in-addr/ip6.arpa syntax DNS names.
 
 
-undup.py
+undup.py and undup2.py
 Unduplicate DNS domain-list by removing unneeded sub-domains when parent domain exists.
+Note: undup2.py is a faster but uses more memory.
 
 
 domsort.py
