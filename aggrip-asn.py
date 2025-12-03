@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 '''
 ==========================================================================
- aggrip.py v0.14-20251203 Copyright 2019-2025 by cbuijs@chrisbuijs.com
+ aggrip.py v0.15-20251203 Copyright 2019-2025 by cbuijs@chrisbuijs.com
 ==========================================================================
 
- Aggregate IPs into a CIDR list based on grouping identifiers.
+ Aggregate IPs into a CIDR list based on a composite identifier.
  
  Logic:
  1. Reads all input lines.
- 2. Sorts the data numerically by Field 2 (Identifier).
- 3. Aggregates CIDRs within those sorted groups.
- 4. Uses the Name/Comment from the FIRST line of the group for the output.
+ 2. Parses Field 2 (ID) and Field 3 (Name).
+ 3. Sorts by Field 2 (Numeric) FIRST, then Field 3 (Alphabetic).
+ 4. Groups by the combination of (Field 2 + Field 3).
+ 5. Aggregates CIDRs within those specific groups.
 
  Input Format (Tab Separated):
  CIDR <tab> Identifier <tab> Name/Comment
@@ -26,7 +27,6 @@ import netaddr
 import itertools
 
 def main():
-    # List to hold parsed rows: dictionaries of {id, net, name}
     raw_data = []
 
     # --- Step 1: Read and Parse Input ---
@@ -37,58 +37,63 @@ def main():
 
         parts = line.split('\t')
 
-        # We need at least CIDR (0) and Identifier (1)
         if len(parts) < 2:
             continue
 
         cidr_str = parts[0].strip()
-        identifier = parts[1].strip()
-        name = parts[2].strip() if len(parts) > 2 else "UNKNOWN"
+        f2_id = parts[1].strip()
+        f3_name = parts[2].strip() if len(parts) > 2 else ""
 
         try:
-            # Create valid network object
             network = netaddr.IPNetwork(cidr_str)
             
             raw_data.append({
-                'id': identifier,
                 'net': network,
-                'name': name
+                'f2': f2_id,
+                'f3': f3_name
             })
 
         except netaddr.AddrFormatError:
             continue
-        except ValueError:
-            continue
 
-    # --- Step 2: Sort by Identifier (Numeric) ---
-    # Python's sort is stable; it preserves the original order of lines 
-    # for items that have the same Identifier.
+    # --- Step 2: Define Sorting Logic ---
+    # We sort by Field 2 (numerically if possible) THEN by Field 3 (alphabetically).
+    # This tuple approach ( (Primary, Secondary) ) handles the sort order cleanly.
+    def sort_key_func(item):
+        id_val = item['f2']
+        name_val = item['f3']
+        
+        try:
+            # Try to return identifier as an integer for proper numeric sorting
+            return (int(id_val), name_val)
+        except ValueError:
+            # Fallback: if identifier isn't a number, sort it as a string
+            # We explicitly cast to str to avoid type comparison errors
+            return (str(id_val), name_val)
+
+    # Sort the data using the custom key
+    # Note: If the list contains mixed types (some IDs are ints, some strings),
+    # Python 3 cannot sort them together easily. We assume IDs are consistent.
     try:
-        raw_data.sort(key=lambda x: int(x['id']))
-    except ValueError:
-        sys.stderr.write("Warning: Non-numeric identifiers detected, sorting alphabetically.\n")
-        raw_data.sort(key=lambda x: x['id'])
+        raw_data.sort(key=sort_key_func)
+    except TypeError:
+        # Fallback for mixed types: treat everything as strings
+        sys.stderr.write("Warning: Mixed numeric/string identifiers. Falling back to string sort.\n")
+        raw_data.sort(key=lambda x: (x['f2'], x['f3']))
 
     # --- Step 3: Loop and Aggregate ---
-    for identifier, group in itertools.groupby(raw_data, key=lambda x: x['id']):
+    # We group by the EXACT SAME tuple (Field 2, Field 3)
+    for (identifier, name), group in itertools.groupby(raw_data, key=lambda x: (x['f2'], x['f3'])):
         
-        # Convert the iterator to a list so we can access data
         group_items = list(group)
-        
-        # Extract just the network objects for merging
         cidrs_to_merge = [item['net'] for item in group_items]
         
-        # --- Logic Change: Use the name of the first CIDR in this group ---
-        # Because the sort was stable, item [0] is the first line from the input
-        # that belonged to this identifier.
-        group_name = group_items[0]['name']
-
-        # Perform the aggregation
+        # Merge
         merged_list = netaddr.cidr_merge(cidrs_to_merge)
 
-        # Output the results
+        # Output
         for cidr in merged_list:
-            sys.stdout.write(f'{cidr}\t{identifier}\t{group_name}\n')
+            sys.stdout.write(f'{cidr}\t{identifier}\t{name}\n')
 
 if __name__ == '__main__':
     try:
