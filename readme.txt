@@ -2,7 +2,7 @@
 Some IP-Address and DNS domainname based tools.
 
 
-aggrip.py and aggrip2.py
+aggrip.py, aggrip2.py and agrip-asn.py (sort ipasn-all.dat)
 Aggregate IP-Addresses/CIDR list into a CIDR based list
 Note: aggrip2.py is faster but uses more memory.
 
