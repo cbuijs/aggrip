@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 '''
 ==========================================================================
- aggrip.py v0.11-20251121 Copyright 2019-2025 by cbuijs@chrisbuijs.com
+ aggrip.py v0.15-20260401 Copyright 2019-2026 by cbuijs@chrisbuijs.com
 ==========================================================================
 
- Aggregate IPs into a CIDR list
+ Aggregate IPs into a CIDR list.
 
 ==========================================================================
 '''

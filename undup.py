@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 '''
 ==========================================================================
- undup.py v0.03-20251121 Copyright 2019-2025 by cbuijs@chrisbuijs.com
+ undup.py v0.15-20260401 Copyright 2019-2026 by cbuijs@chrisbuijs.com
 ==========================================================================
 
- Undup DNS Domainlist (Remove sub-domains when parent exists)
+ Undup DNS Domainlist (Remove sub-domains when parent exists).
 
 ==========================================================================
 '''

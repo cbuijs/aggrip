@@ -1,11 +1,26 @@
 #!/usr/bin/env python3
+'''
+==========================================================================
+ domsort.py v0.15-20260401 Copyright 2019-2026 by cbuijs@chrisbuijs.com
+==========================================================================
+
+ Validate and sort a domain list from root level down (TLD-first).
+ 
+ Logic:
+ 1. Reads standard input and normalizes to lowercase.
+ 2. Strictly validates domains via regex (now supporting IDN TLDs).
+ 3. Sorts tree-wise (e.g., 'com' -> 'example' -> 'sub').
+
+==========================================================================
+'''
+
 import sys
 import re
 
-# Regex pattern for strict domain validation
-# Matches: alphanumeric/hyphen subdomains + dot + alphabetic TLD (min 2 chars)
+# Matches: alphanumeric/hyphen subdomains + dot + alphabetic/numeric/hyphen TLD (min 2 chars)
+# IDN TLDs like "xn--p1ai" are now permitted.
 DOMAIN_PATTERN = re.compile(
-    r'^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$'
+    r'^([a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?\.)+[a-z0-9\-]{2,}$'
 )
 
 def domain_sort_key(domain):
@@ -18,19 +33,14 @@ def domain_sort_key(domain):
 def main():
     valid_domains = []
     
-    # Read lines from standard input
     for line in sys.stdin:
-        # Strip whitespace and normalize to lowercase
         clean_line = line.strip().lower()
         
-        # If the line is a valid domain, add it to our list. Otherwise, discard.
         if DOMAIN_PATTERN.match(clean_line):
             valid_domains.append(clean_line)
 
-    # Sort the list using the reverse-order key
     sorted_domains = sorted(valid_domains, key=domain_sort_key)
 
-    # Output the sorted domains
     for domain in sorted_domains:
         print(domain)
 

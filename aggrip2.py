@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 '''
 ==========================================================================
- aggrip2.py v0.11-20251124 Copyright 2019-2025 by cbuijs@chrisbuijs.com
+ aggrip2.py v0.15-20260401 Copyright 2019-2026 by cbuijs@chrisbuijs.com
 ==========================================================================
 
- Aggregate IPs into a CIDR list using ipaddress
- Note: Faster but more memory then aggrip.py
+ Aggregate IPs into a CIDR list using ipaddress.
+ Note: Faster but more memory than aggrip.py.
 
 ==========================================================================
 '''

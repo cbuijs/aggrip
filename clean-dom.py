@@ -1,11 +1,26 @@
 #!/usr/bin/env python3
+'''
+==========================================================================
+ clean-dom.py v0.15-20260401 Copyright 2019-2026 by cbuijs@chrisbuijs.com
+==========================================================================
+
+ Optimize a highly efficient DNS blocklist.
+ 
+ Logic:
+ 1. Reads blocklist, allowlist, and optional Top-N list.
+ 2. Sorts domains by depth (number of dots) to ensure parent domains 
+    are evaluated before subdomains.
+ 3. Cross-references against the allowlist and Top-N list.
+ 4. Deduplicates subdomains on the fly.
+
+==========================================================================
+'''
+
 import argparse
 import sys
 
 def read_domains(filename, is_topn=False):
-    """Reads a file and returns a list of cleaned, lowercase domains.
-    If is_topn is True, it handles both plain text and CSV formats (like Tranco).
-    """
+    """Reads a file and returns a list of cleaned, lowercase domains."""
     domains = []
     with open(filename, 'r') as f:
         for line in f:
@@ -21,9 +36,7 @@ def read_domains(filename, is_topn=False):
     return domains
 
 def get_parents(domain):
-    """Yields the domain and all its parent domains using fast string slicing.
-    Much faster than split() and join() in tight loops.
-    """
+    """Yields the domain and all its parent domains using fast string slicing."""
     yield domain
     idx = domain.find('.')
     while idx != -1:
@@ -33,7 +46,6 @@ def get_parents(domain):
 def domain_sort_key(item):
     """Generates a sorting key for tree-down (TLD to subdomain) sorting."""
     if item.startswith('# '):
-        # Use a maxsplit of 1 for speed
         domain = item[2:].split(' - ', 1)[0]
     else:
         domain = item
@@ -65,16 +77,13 @@ def main():
     final_blocklist = []
     active_blocks = set()
 
-    # OPTIMIZATION 1: Sort by depth (number of dots) first. 
-    # This guarantees parents are processed before their subdomains.
+    # OPTIMIZATION 1: Sort by depth guarantees parents are processed before subdomains.
     blocklist_domains.sort(key=lambda d: d.count('.'))
 
     # OPTIMIZATION 2: Single-pass processing.
     for domain in blocklist_domains:
-        # Pre-calculate parents once per domain using the fast generator
         domain_parents = list(get_parents(domain))
         
-        # Check 1: Allowlist
         is_allowlisted = False
         for parent in domain_parents:
             if parent in allowlist_domains:
@@ -82,9 +91,8 @@ def main():
                 is_allowlisted = True
                 break
         if is_allowlisted:
-            continue # Skip remaining checks and move to the next domain
+            continue
             
-        # Check 2: Top-N List
         if topn_domains:
             is_topn = False
             for parent in domain_parents:
@@ -95,9 +103,6 @@ def main():
                 removed_log.append(f"# {domain} - Removed because of Not a TOP-N")
                 continue
                 
-        # Check 3: Deduplication (Active Blocks)
-        # Because we sorted by depth earlier, if 'example.com' was valid, 
-        # it is ALREADY in active_blocks by the time we evaluate 'sub.example.com'
         is_deduped = False
         for parent in domain_parents:
             if parent in active_blocks:
@@ -107,11 +112,9 @@ def main():
         if is_deduped:
             continue
             
-        # If the domain survived all checks, it's a valid, unique block
         final_blocklist.append(domain)
         active_blocks.add(domain)
 
-    # Combine output and run the final tree-down sort
     output_lines = final_blocklist
     if not args.suppress_comments:
         output_lines.extend(removed_log)

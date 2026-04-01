@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 '''
 ==========================================================================
- undup2.py v0.03-20251020 Copyright 2019-2025 by cbuijs@chrisbuijs.com
+ undup2.py v0.15-20260401 Copyright 2019-2026 by cbuijs@chrisbuijs.com
 ==========================================================================
 
- Undup DNS Domainlist (Remove sub-domains)
- Note: Faster but more memory then undup.py
+ Undup DNS Domainlist (Remove sub-domains).
+ Note: Faster but more memory than undup.py.
 
 ==========================================================================
 '''
