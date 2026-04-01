@@ -2,7 +2,7 @@
 Some IP-Address and DNS domainname based tools.
 
 
-aggrip.py, aggrip2.py and agrip-asn.py (sort ipasn-all.dat)
+aggrip.py, and agrip-asn.py (sort ipasn-all.dat)
 Aggregate IP-Addresses/CIDR list into a CIDR based list
 Note: aggrip2.py is faster but uses more memory.
 
@@ -14,17 +14,18 @@ revip.py
 Convert an IP-Address/CIDR list into reverse in-addr/ip6.arpa syntax DNS names.
 
 
-undup.py and undup2.py
+undup.py and undup2.py.
 Unduplicate DNS domain-list by removing unneeded sub-domains when parent domain exists.
 Note: undup2.py is faster but uses more memory.
 
 
-domsort.py
+domsort.py and domsort2.py.
 Sort domain-list from root down (tree wise).
+Note: domsort2.py is faster but uses more memory.
 
 
 ====== NOTE:
-The tools do not accept any command-line parameters, just pipe data into them like:
+The tools do not accept any command-line parameters (except clean-dom.py), just pipe data into them like:
 
      "cat file.txt | ./aggrip.py".
 
