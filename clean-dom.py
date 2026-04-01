@@ -25,7 +25,7 @@ import sys
 import ipaddress
 import urllib.request
 
-NULL_IPS = {'0.0.0.0', '127.0.0.1', '::1'}
+NULL_IPS = {'0.0.0.0', '127.0.0.1', '::', '::1'}
 
 def log_msg(msg, is_verbose):
     """Prints a message to STDERR if verbose mode is enabled."""
