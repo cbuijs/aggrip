@@ -76,7 +76,7 @@ Examples:
   cat domains.txt | ./undup.py | ./domsort.py > clean_domains.txt
   
 For clean-dom.py:
-  ./clean-dom.py blocklist.txt allowlist.txt [topnlist.txt]
+  ./clean-dom.py blocklist.txt allowlist.txt [topnlist.txt] [--suppress-comments]
 
 
 --- DEPENDENCIES & INSTALLATION ---
