@@ -41,9 +41,10 @@ Unix-like environments.
 
 * clean-dom.py
   A comprehensive optimization script for DNS blocklists. It cross-references 
-  a blocklist against an optional allowlist and an optional Top-N list, while 
-  simultaneously deduplicating subdomains. (Note: This is the only tool that 
-  takes standard command-line arguments instead of STDIN).
+  one or more blocklists against optional allowlists and Top-N lists, while 
+  simultaneously deduplicating subdomains across all provided files. 
+  (Note: This is the only tool that takes standard command-line arguments 
+  instead of STDIN. It supports passing multiple files per argument).
 
 * undup.py
   Deduplicates a DNS domain list by removing unnecessary subdomains if the 
@@ -77,7 +78,7 @@ Examples:
   cat domains.txt | ./undup.py | ./domsort.py > clean_domains.txt
  
 For clean-dom.py:
-  ./clean-dom.py --blocklist blocklist.txt [--allowlist allowlist.txt] [--topnlist topnlist.txt] [--suppress-comments]
+  ./clean-dom.py --blocklist bl1.txt bl2.txt [--allowlist al1.txt al2.txt] [--topnlist top1.txt top2.txt] [--suppress-comments]
 
 
 --- DEPENDENCIES & INSTALLATION ---

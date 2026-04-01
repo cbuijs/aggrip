@@ -7,10 +7,10 @@
  Optimize a highly efficient DNS blocklist.
  
  Logic:
- 1. Reads blocklist, and optional allowlist, and optional Top-N list.
+ 1. Reads and consolidates multiple blocklists, allowlists, and Top-N lists.
  2. Sorts domains by depth (number of dots) to ensure parent domains 
     are evaluated before subdomains.
- 3. Cross-references against the allowlist and Top-N list (if provided).
+ 3. Cross-references against the consolidated allowlists and Top-N lists.
  4. Deduplicates subdomains on the fly.
 
 ==========================================================================
@@ -54,23 +54,33 @@ def domain_sort_key(item):
 
 def main():
     parser = argparse.ArgumentParser(description="Optimize a highly efficient DNS blocklist.")
-    parser.add_argument("--blocklist", required=True, help="Path to the DNS blocklist file")
-    parser.add_argument("--allowlist", help="Optional path to the DNS allowlist file")
-    parser.add_argument("--topnlist", help="Optional path to a Top-N list file")
+    parser.add_argument("--blocklist", nargs='+', required=True, 
+                        help="Path(s) to the DNS blocklist file(s)")
+    parser.add_argument("--allowlist", nargs='+', 
+                        help="Optional path(s) to the DNS allowlist file(s)")
+    parser.add_argument("--topnlist", nargs='+', 
+                        help="Optional path(s) to Top-N list file(s)")
     parser.add_argument("--suppress-comments", action="store_true", 
                         help="Suppress the audit log of removed domains in the output")
     args = parser.parse_args()
 
     try:
-        blocklist_domains = read_domains(args.blocklist)
+        # Consolidate all provided blocklists
+        blocklist_domains = []
+        for bl_file in args.blocklist:
+            blocklist_domains.extend(read_domains(bl_file))
         
+        # Consolidate all provided allowlists
         allowlist_domains = set()
         if args.allowlist:
-            allowlist_domains = set(read_domains(args.allowlist))
+            for al_file in args.allowlist:
+                allowlist_domains.update(read_domains(al_file))
         
+        # Consolidate all provided Top-N lists
         topn_domains = set()
         if args.topnlist:
-            topn_domains = set(read_domains(args.topnlist, is_topn=True))
+            for topn_file in args.topnlist:
+                topn_domains.update(read_domains(topn_file, is_topn=True))
             
     except FileNotFoundError as e:
         print(f"Error reading file: {e}", file=sys.stderr)
@@ -81,13 +91,14 @@ def main():
     active_blocks = set()
 
     # OPTIMIZATION 1: Sort by depth guarantees parents are processed before subdomains.
+    # Sorting a unified blocklist ensures cross-file deduplication works perfectly.
     blocklist_domains.sort(key=lambda d: d.count('.'))
 
     # OPTIMIZATION 2: Single-pass processing.
     for domain in blocklist_domains:
         domain_parents = list(get_parents(domain))
         
-        # Check against Allowlist if it exists
+        # Check against consolidated Allowlist
         if allowlist_domains:
             is_allowlisted = False
             for parent in domain_parents:
@@ -98,7 +109,7 @@ def main():
             if is_allowlisted:
                 continue
             
-        # Check against Top-N list if it exists
+        # Check against consolidated Top-N list
         if topn_domains:
             is_topn = False
             for parent in domain_parents:
@@ -109,7 +120,7 @@ def main():
                 removed_log.append(f"# {domain} - Removed because of Not a TOP-N")
                 continue
                 
-        # Deduplication check
+        # Deduplication check against previously processed domains
         is_deduped = False
         for parent in domain_parents:
             if parent in active_blocks:
