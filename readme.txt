@@ -41,9 +41,9 @@ Unix-like environments.
 
 * clean-dom.py
   A comprehensive optimization script for DNS blocklists. It cross-references 
-  a blocklist against an allowlist and an optional Top-N list, while simultaneously 
-  deduplicating subdomains. (Note: This is the only tool that takes standard 
-  command-line arguments instead of STDIN).
+  a blocklist against an optional allowlist and an optional Top-N list, while 
+  simultaneously deduplicating subdomains. (Note: This is the only tool that 
+  takes standard command-line arguments instead of STDIN).
 
 * undup.py
   Deduplicates a DNS domain list by removing unnecessary subdomains if the 
@@ -64,6 +64,7 @@ Unix-like environments.
   filtering and bulk memory reads.
   Note: Faster execution but requires more memory.
 
+
 --- USAGE INSTRUCTIONS ---
 
 With the exception of `clean-dom.py`, these tools do NOT accept command-line 
@@ -74,9 +75,9 @@ Examples:
   cat raw_ips.txt | ./aggrip.py > optimized_cidrs.txt
   cat ranges.txt | ./range2cidr.py | ./aggrip.py
   cat domains.txt | ./undup.py | ./domsort.py > clean_domains.txt
-  
+ 
 For clean-dom.py:
-  ./clean-dom.py blocklist.txt allowlist.txt [topnlist.txt] [--suppress-comments]
+  ./clean-dom.py --blocklist blocklist.txt [--allowlist allowlist.txt] [--topnlist topnlist.txt] [--suppress-comments]
 
 
 --- DEPENDENCIES & INSTALLATION ---

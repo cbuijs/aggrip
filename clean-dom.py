@@ -7,10 +7,10 @@
  Optimize a highly efficient DNS blocklist.
  
  Logic:
- 1. Reads blocklist, allowlist, and optional Top-N list.
+ 1. Reads blocklist, and optional allowlist, and optional Top-N list.
  2. Sorts domains by depth (number of dots) to ensure parent domains 
     are evaluated before subdomains.
- 3. Cross-references against the allowlist and Top-N list.
+ 3. Cross-references against the allowlist and Top-N list (if provided).
  4. Deduplicates subdomains on the fly.
 
 ==========================================================================
@@ -54,16 +54,19 @@ def domain_sort_key(item):
 
 def main():
     parser = argparse.ArgumentParser(description="Optimize a highly efficient DNS blocklist.")
-    parser.add_argument("blocklist", help="Path to the DNS blocklist file")
-    parser.add_argument("allowlist", help="Path to the DNS allowlist file")
-    parser.add_argument("topnlist", nargs='?', default=None, help="Optional path to a Top-N list file")
+    parser.add_argument("--blocklist", required=True, help="Path to the DNS blocklist file")
+    parser.add_argument("--allowlist", help="Optional path to the DNS allowlist file")
+    parser.add_argument("--topnlist", help="Optional path to a Top-N list file")
     parser.add_argument("--suppress-comments", action="store_true", 
                         help="Suppress the audit log of removed domains in the output")
     args = parser.parse_args()
 
     try:
         blocklist_domains = read_domains(args.blocklist)
-        allowlist_domains = set(read_domains(args.allowlist))
+        
+        allowlist_domains = set()
+        if args.allowlist:
+            allowlist_domains = set(read_domains(args.allowlist))
         
         topn_domains = set()
         if args.topnlist:
@@ -84,15 +87,18 @@ def main():
     for domain in blocklist_domains:
         domain_parents = list(get_parents(domain))
         
-        is_allowlisted = False
-        for parent in domain_parents:
-            if parent in allowlist_domains:
-                removed_log.append(f"# {domain} - Removed because of Allowlisted by {parent}")
-                is_allowlisted = True
-                break
-        if is_allowlisted:
-            continue
+        # Check against Allowlist if it exists
+        if allowlist_domains:
+            is_allowlisted = False
+            for parent in domain_parents:
+                if parent in allowlist_domains:
+                    removed_log.append(f"# {domain} - Removed because of Allowlisted by {parent}")
+                    is_allowlisted = True
+                    break
+            if is_allowlisted:
+                continue
             
+        # Check against Top-N list if it exists
         if topn_domains:
             is_topn = False
             for parent in domain_parents:
@@ -103,6 +109,7 @@ def main():
                 removed_log.append(f"# {domain} - Removed because of Not a TOP-N")
                 continue
                 
+        # Deduplication check
         is_deduped = False
         for parent in domain_parents:
             if parent in active_blocks:
