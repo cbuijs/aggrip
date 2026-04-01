@@ -1,2 +1,18 @@
-netaddr>=0.7.19        
-regex>=2019.6.8      
+# ========================================================================
+# Aggrip Python Dependencies
+# ========================================================================
+# Most of the scripts utilize Python 3's built-in standard libraries
+# (such as ipaddress, re, itertools, sys). The following package must be 
+# installed via pip for aggrip.py and aggrip-asn.py to function correctly.
+#
+# --- INSTALLATION INSTRUCTIONS ---
+# To install the required dependencies, run the following command:
+#     pip install -r requirements.txt
+#
+# To update existing dependencies to the latest versions, run:
+#     pip install --upgrade -r requirements.txt
+# ========================================================================
+
+# Required by aggrip.py and aggrip-asn.py for advanced IP/CIDR merging
+netaddr>=1.3.0
+

@@ -1,31 +1,88 @@
+==========================================================================
+ Aggrip & DNS Domain Utilities
+ Copyright 2019-2025 by cbuijs@chrisbuijs.com
+==========================================================================
 
-Some IP-Address and DNS domainname based tools.
+A collection of highly optimized Python 3 command-line utilities for 
+processing, aggregating, and sorting IP addresses, CIDR networks, and 
+DNS domain lists. 
+
+These tools are designed for high-performance pipeline operations in 
+Unix-like environments.
+
+--- TOOL OVERVIEW ---
+
+[ IP Address & CIDR Tools ]
+
+* aggrip.py
+  Aggregates a raw list of IP addresses and CIDR blocks into a 
+  merged, optimized CIDR list. Uses the `netaddr` library.
+
+* aggrip2.py
+  Performs the same aggregation as `aggrip.py` but uses Python's built-in 
+  `ipaddress` module. 
+  Note: This version is significantly faster but consumes more memory.
+
+* aggrip-asn.py
+  Aggregates IPs into CIDR lists based on a composite identifier. It reads 
+  tab-separated input (CIDR \t ID \t Name), sorts by ID/Name, groups them, 
+  and merges the CIDRs without losing the identifying metadata.
+
+* range2cidr.py
+  Converts and aggregates IP-Range syntax (e.g., 192.168.1.0-192.168.1.255) 
+  into standard CIDR notation. Supports both space and dash delimiters.
+
+* revip.py
+  Converts a list of IP addresses or CIDRs into their corresponding reverse 
+  DNS lookup names (in-addr.arpa for IPv4, and ip6.arpa for IPv6).
 
 
-aggrip.py, and agrip-asn.py (sort ipasn-all.dat)
-Aggregate IP-Addresses/CIDR list into a CIDR based list
-Note: aggrip2.py is faster but uses more memory.
+[ DNS Domain Tools ]
 
-range2cidr.py
-Convert/Aggregate IP-Ranges list (192.168.1.0-192.168.1.255 syntax) into a CIDR based list
+* clean-dom.py
+  A comprehensive optimization script for DNS blocklists. It cross-references 
+  a blocklist against an allowlist and an optional Top-N list, while simultaneously 
+  deduplicating subdomains. (Note: This is the only tool that takes standard 
+  command-line arguments instead of STDIN).
+
+* undup.py
+  Deduplicates a DNS domain list by removing unnecessary subdomains if the 
+  parent domain already exists in the list (e.g., removes 'sub.example.com' 
+  if 'example.com' is present).
+
+* undup2.py
+  Performs the same function as `undup.py` but reads data in raw binary/byte 
+  blocks. 
+  Note: Faster execution but requires more memory.
+
+* domsort.py
+  Strictly validates and sorts a domain list from the root level down 
+  (tree-wise/TLD-first). Example: 'com' -> 'example' -> 'sub'.
+
+* domsort2.py
+  Performs the same function as `domsort.py` but utilizes C-level regex 
+  filtering and bulk memory reads.
+  Note: Faster execution but requires more memory.
+
+--- USAGE INSTRUCTIONS ---
+
+With the exception of `clean-dom.py`, these tools do NOT accept command-line 
+file parameters. They are designed to be chained together using standard 
+input (STDIN) and standard output (STDOUT).
+
+Examples:
+  cat raw_ips.txt | ./aggrip.py > optimized_cidrs.txt
+  cat ranges.txt | ./range2cidr.py | ./aggrip.py
+  cat domains.txt | ./undup.py | ./domsort.py > clean_domains.txt
+  
+For clean-dom.py:
+  ./clean-dom.py blocklist.txt allowlist.txt [topnlist.txt]
 
 
-revip.py
-Convert an IP-Address/CIDR list into reverse in-addr/ip6.arpa syntax DNS names.
+--- DEPENDENCIES & INSTALLATION ---
 
+Some tools (aggrip.py, aggrip-asn.py) require the external `netaddr` library.
+To install or upgrade the required dependencies, run:
 
-undup.py and undup2.py.
-Unduplicate DNS domain-list by removing unneeded sub-domains when parent domain exists.
-Note: undup2.py is faster but uses more memory.
-
-
-domsort.py and domsort2.py.
-Sort domain-list from root down (tree wise).
-Note: domsort2.py is faster but uses more memory.
-
-
-====== NOTE:
-The tools do not accept any command-line parameters (except clean-dom.py), just pipe data into them like:
-
-     "cat file.txt | ./aggrip.py".
+  pip install -r requirements.txt
 
