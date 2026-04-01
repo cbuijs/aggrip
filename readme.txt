@@ -43,6 +43,16 @@ Unix-like environments.
   A comprehensive optimization script for DNS blocklists. It cross-references 
   one or more blocklists against optional allowlists and Top-N lists, while 
   simultaneously deduplicating subdomains across all provided files. 
+  
+  Input Parser Features:
+  - Accepts both local file paths and remote URLs (http:// or https://) natively.
+  - Supports standard plain domain lists.
+  - Supports HOSTS file syntax (Extracts domains strictly from entries using 
+    null-IPs or localhost IPs like 0.0.0.0, 127.0.0.1, or ::1).
+  - Supports Adblock DNS syntax (e.g., ||domain.com^ and @@||domain.com^).
+  - Automatically normalizes inputs by lowercasing, trimming leading/trailing 
+    dots, and removing prefix wildcards (*.domain.com -> domain.com).
+
   (Note: This is the only tool that takes standard command-line arguments 
   instead of STDIN. It supports passing multiple files per argument).
 
@@ -78,7 +88,14 @@ Examples:
   cat domains.txt | ./undup.py | ./domsort.py > clean_domains.txt
  
 For clean-dom.py:
-  ./clean-dom.py --blocklist bl1.txt bl2.txt [--allowlist al1.txt al2.txt] [--topnlist top1.txt top2.txt] [--suppress-comments]
+  ./clean-dom.py --blocklist bl1.txt https://example.com/bl2.txt \
+                 [--allowlist al1.txt] \
+                 [--topnlist top1.txt] \
+                 [--suppress-comments] \
+                 [-v | --verbose]
+
+  * Use the -v or --verbose flag to print loading progress, processing stages, 
+    and a final deduplication statistics summary to STDERR.
 
 
 --- DEPENDENCIES & INSTALLATION ---
