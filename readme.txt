@@ -42,17 +42,19 @@ Unix-like environments.
 * clean-dom.py
   A comprehensive optimization script for DNS blocklists. It cross-references 
   one or more blocklists against optional allowlists and Top-N lists, while 
-  simultaneously deduplicating subdomains across all provided files. 
+  simultaneously deduplicating subdomains across all provided files.
   
-  Input Parser Features:
-  - Accepts both local file paths and remote URLs (http:// or https://) natively.
-  - Supports standard plain domain lists.
-  - Supports HOSTS file syntax (Extracts domains strictly from entries using 
-    null-IPs or localhost IPs like 0.0.0.0, 127.0.0.1, or ::1).
-  - Supports Adblock DNS syntax (e.g., ||domain.com^ and @@||domain.com^).
+  Advanced parsing and routing features:
+  - Accepts both local file paths and remote URLs (http:// or https://).
+  - Supports standard plain domain lists, HOSTS file syntax, and Adblock syntax.
+  - Dynamically routes inline Adblock allowlist rules (@@||domain.com^) found 
+    inside blocklist files directly to the allowlist.
+  - Fully parses and enforces Adblock `$denyallow` modifiers as strict 
+    exceptions to both block and allowlist rules.
   - Automatically normalizes inputs by lowercasing, trimming leading/trailing 
     dots, and removing prefix wildcards (*.domain.com -> domain.com).
-
+  - Outputs dynamically to Plain Domain, HOSTS, or standard Adblock format.
+  
   (Note: This is the only tool that takes standard command-line arguments 
   instead of STDIN. It supports passing multiple files per argument).
 
@@ -91,6 +93,9 @@ For clean-dom.py:
   ./clean-dom.py --blocklist bl1.txt https://example.com/bl2.txt \
                  [--allowlist al1.txt] \
                  [--topnlist top1.txt] \
+                 [-o {domain,hosts,adblock}] \
+                 [--out-blocklist out_bl.txt] \
+                 [--out-allowlist out_al.txt] \
                  [--suppress-comments] \
                  [-v | --verbose]
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 '''
 ==========================================================================
- clean-dom.py v0.17.1 Copyright 2019-2026 by cbuijs@chrisbuijs.com
+ clean-dom.py v0.18 Copyright 2019-2026 by cbuijs@chrisbuijs.com
 ==========================================================================
 
  Optimize a highly efficient DNS blocklist.
@@ -20,6 +20,7 @@
  7. Cross-references against the consolidated allowlists and Top-N lists.
  8. Deduplicates subdomains on the fly.
  9. Outputs in Plain Domain, HOSTS, or Advanced Adblock syntax.
+ 10. Supports writing directly to dedicated blocklist and allowlist files.
 
 ==========================================================================
 '''
@@ -206,6 +207,8 @@ def main():
     parser.add_argument("--topnlist", nargs='+', help="Optional path(s) or URL(s) to Top-N list(s)")
     parser.add_argument("-o", "--output", choices=["domain", "hosts", "adblock"], default="domain", 
                         help="Output format: 'domain' (default), 'hosts', or 'adblock'")
+    parser.add_argument("--out-blocklist", help="Optional file path to write the blocklist output (default: STDOUT)")
+    parser.add_argument("--out-allowlist", help="Optional file path to write the allowlist output")
     parser.add_argument("--suppress-comments", action="store_true", help="Suppress the audit log of removed domains")
     parser.add_argument("-v", "--verbose", action="store_true", help="Show progress and statistics on STDERR")
     args = parser.parse_args()
@@ -307,36 +310,60 @@ def main():
     # Output printing phase
     log_msg(f"--- Stage 6: Generating Output ---", v)
     
+    # Setup output streams
+    try:
+        out_block = open(args.out_blocklist, 'w', encoding='utf-8') if args.out_blocklist else sys.stdout
+        out_allow = open(args.out_allowlist, 'w', encoding='utf-8') if args.out_allowlist else None
+    except Exception as e:
+        print(f"Error opening output file(s): {e}", file=sys.stderr)
+        sys.exit(1)
+        
     # Print Adblock headers
     if args.output == "adblock":
-        print("[Adblock Plus]")
-        print(f"! Version: {int(time.time())}")
+        out_block.write("[Adblock Plus]\n")
+        out_block.write(f"! version: {int(time.time())}\n")
+        if out_allow:
+            out_allow.write("[Adblock Plus]\n")
+            out_allow.write(f"! version: {int(time.time())}\n")
     
-    # Build Adblock specific structures if needed
+    # Build Adblock specific structures and format warnings
     adblock_rules = {}
     standalone_allows = []
+    stats_allow_ignored = 0
     
-    if args.output == "adblock":
-        for dom in active_blocks:
-            adblock_rules[dom] = []
-            
-        for allow_dom in allowlist_domains:
-            has_blocked_parent = False
-            for parent in get_parents(allow_dom):
-                if parent != allow_dom and parent in active_blocks:
-                    # Map the allowlisted subdomain to its blocked parent as a $denyallow exception
-                    adblock_rules[parent].append(allow_dom)
-                    has_blocked_parent = True
-                    break 
-            
-            # If the allowed domain doesn't fall under any active block rule, print it standalone
-            if not has_blocked_parent:
-                standalone_allows.append(allow_dom)
+    for dom in active_blocks:
+        adblock_rules[dom] = []
+        
+    for allow_dom in allowlist_domains:
+        has_blocked_parent = False
+        for parent in get_parents(allow_dom):
+            if parent != allow_dom and parent in active_blocks:
+                # Map the allowlisted subdomain to its blocked parent as a $denyallow exception
+                adblock_rules[parent].append(allow_dom)
+                has_blocked_parent = True
+                
+                # If flat format, this rule is functionally lost because the sinkhole blocks the parent.
+                if args.output in ("domain", "hosts"):
+                    removed_log.append(f"# {allow_dom} - Allowlisted but blocked by parent domain {parent}")
+                    stats_allow_ignored += 1
+                break 
+        
+        # If the allowed domain doesn't fall under any active block rule, it's standalone
+        if not has_blocked_parent:
+            standalone_allows.append(allow_dom)
 
-    # Output standalone allows first (standard adblock list convention)
-    if args.output == "adblock" and standalone_allows:
+    # Output allowlist logic
+    if out_allow:
+        # If writing to a dedicated allowlist file, output all known allowlist domains
+        for dom in sorted(allowlist_domains, key=domain_sort_key):
+            if args.output == "adblock":
+                out_allow.write(f"@@||{dom}^\n")
+            else:
+                out_allow.write(f"{dom}\n")
+    elif args.output == "adblock" and standalone_allows:
+        # Standard adblock blocklists output standalone allows at the top if no dedicated file is provided
         for dom in sorted(standalone_allows, key=domain_sort_key):
-            print(f"@@||{dom}^")
+            out_block.write(f"@@||{dom}^\n")
 
     # Combine blocks and comments for sorted output
     output_items = list(final_blocklist)
@@ -347,21 +374,27 @@ def main():
         if item.startswith('#'):
             # Format comments based on output type
             if args.output == "adblock":
-                print(f"! {item[2:]}")
+                out_block.write(f"! {item[2:]}\n")
             else:
-                print(item)
+                out_block.write(f"{item}\n")
         else:
             # Format domains based on output type
             if args.output == "hosts":
-                print(f"0.0.0.0 {item}")
+                out_block.write(f"0.0.0.0 {item}\n")
             elif args.output == "adblock":
                 exceptions = adblock_rules.get(item, [])
                 if exceptions:
-                    print(f"||{item}^$denyallow={'|'.join(sorted(exceptions))}")
+                    out_block.write(f"||{item}^$denyallow={'|'.join(sorted(exceptions))}\n")
                 else:
-                    print(f"||{item}^")
+                    out_block.write(f"||{item}^\n")
             else:
-                print(item)
+                out_block.write(f"{item}\n")
+
+    # Clean up output streams
+    if args.out_blocklist:
+        out_block.close()
+    if args.out_allowlist:
+        out_allow.close()
 
     if v:
         log_msg("===========================================", v)
@@ -371,8 +404,12 @@ def main():
         log_msg(f"Removed (Allowlisted)       : {stats_allowlisted:,}", v)
         log_msg(f"Removed (Not in Top-N)      : {stats_topn:,}", v)
         log_msg(f"Removed (Sub-domain Dedup)  : {stats_deduped:,}", v)
+        if args.output in ("domain", "hosts"):
+            log_msg(f"Ignored Allows (Blocked)    : {stats_allow_ignored:,}", v)
         log_msg("-------------------------------------------", v)
         log_msg(f"Final Active Domains        : {len(active_blocks):,}", v)
+        if args.out_allowlist:
+            log_msg(f"Exported Allowlist Domains  : {len(allowlist_domains):,}", v)
         log_msg("===========================================", v)
 
 if __name__ == "__main__":
