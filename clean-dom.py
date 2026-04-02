@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 '''
 ==========================================================================
- clean-dom.py v0.15-20260401 Copyright 2019-2026 by cbuijs@chrisbuijs.com
+ clean-dom.py v0.17.1 Copyright 2019-2026 by cbuijs@chrisbuijs.com
 ==========================================================================
 
  Optimize a highly efficient DNS blocklist.
@@ -12,10 +12,14 @@
  2. Normalizes domains (lowercasing, wildcard removal, adblock syntax 
     stripping, leading/trailing dot removal).
  3. Supports Plain Domain lists, HOSTS syntax, and Adblock DNS syntax.
- 4. Sorts domains by depth (number of dots) to ensure parent domains 
+ 4. Dynamically routes inline Adblock allowlist rules (@@) to the allowlist.
+ 5. Parses and enforces Adblock $denyallow modifiers (correctly inversing 
+    exceptions based on primary rule intent).
+ 6. Sorts domains by depth (number of dots) to ensure parent domains 
     are evaluated before subdomains.
- 5. Cross-references against the consolidated allowlists and Top-N lists.
- 6. Deduplicates subdomains on the fly.
+ 7. Cross-references against the consolidated allowlists and Top-N lists.
+ 8. Deduplicates subdomains on the fly.
+ 9. Outputs in Plain Domain, HOSTS, or Advanced Adblock syntax.
 
 ==========================================================================
 '''
@@ -24,6 +28,7 @@ import argparse
 import sys
 import ipaddress
 import urllib.request
+import time
 
 NULL_IPS = {'0.0.0.0', '127.0.0.1', '::', '::1'}
 
@@ -36,7 +41,6 @@ def is_valid_ip(token):
     """Fast-path check for IP addresses to avoid exception overhead on standard domains."""
     if not token:
         return False
-    # Only try to parse if it starts with a digit (IPv4/IPv6) or colon (IPv6)
     c = token[0]
     if c.isdigit() or c == ':':
         try:
@@ -69,10 +73,44 @@ def normalize_domain(domain):
     
     return domain
 
+def parse_domain_token(token):
+    """Parses Adblock syntax, extracting the domain, allowlist status, and denyallow subdomains."""
+    is_allow = False
+    denyallow_domains = []
+    
+    # Handle allowlist prefix before modifier checks
+    if token.startswith('@@'):
+        is_allow = True
+        token = token[2:]
+        
+    # Extract modifiers (e.g., $denyallow=...)
+    if '$' in token:
+        parts = token.split('$', 1)
+        domain_part = parts[0]
+        modifiers = parts[1]
+        
+        for mod in modifiers.split(','):
+            if mod.startswith('denyallow='):
+                da_list = mod[len('denyallow='):].split('|')
+                for da_dom in da_list:
+                    clean_da = normalize_domain(da_dom)
+                    if clean_da:
+                        denyallow_domains.append(clean_da)
+    else:
+        domain_part = token
+        
+    clean_dom = normalize_domain(domain_part)
+    
+    return {
+        'domain': clean_dom,
+        'is_allow': is_allow,
+        'denyallow': denyallow_domains,
+        'original_token': token
+    }
+
 def get_lines(source):
     """Yields lines efficiently from either a remote URL or a local file."""
     if source.startswith('http://') or source.startswith('https://'):
-        # Use a standard user-agent as some blocklist providers block bare python-urllib
         req = urllib.request.Request(source, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=15) as response:
             for line in response:
@@ -82,26 +120,49 @@ def get_lines(source):
             for line in f:
                 yield line
 
-def read_domains(source, is_topn=False, is_verbose=False):
-    """Reads a file or URL and returns a list of cleaned, normalized domains."""
-    domains = []
+def read_domains(source, is_topn=False, force_allow=False, is_verbose=False):
+    """Reads a file or URL and routes domains into block, allow, and denyallow lists."""
+    block_domains = []
+    allow_domains = []
+    denyallow_overrides = []
+    
     log_msg(f"Loading data from: {source}", is_verbose)
     
+    def process_parsed(parsed, raw_token):
+        """Helper to append parsed domains and apply logical inverses for $denyallow."""
+        if parsed['domain']:
+            if parsed['is_allow'] and not force_allow:
+                log_msg(f"Routed inline rule to allowlist : {parsed['domain']} (from '{raw_token}')", is_verbose)
+                
+            if parsed['is_allow'] or force_allow:
+                allow_domains.append(parsed['domain'])
+            else:
+                block_domains.append(parsed['domain'])
+                
+        if parsed['denyallow']:
+            log_msg(f"Extracted $denyallow domain(s): {', '.join(parsed['denyallow'])} (from '{raw_token}')", is_verbose)
+            
+            # The 'denyallow' modifier is an exception to the primary rule.
+            if parsed['is_allow'] or force_allow:
+                # Primary is ALLOW, so exceptions are BLOCKED.
+                block_domains.extend(parsed['denyallow'])
+                # Protect these blocked subdomains from being wiped by their allowlisted parent
+                denyallow_overrides.extend(parsed['denyallow'])
+            else:
+                # Primary is BLOCK, so exceptions are ALLOWED.
+                allow_domains.extend(parsed['denyallow'])
+
     for line in get_lines(source):
-        # Remove inline comments and strip whitespace
         line = line.split('#')[0].strip()
-        
-        # Skip empty lines or adblock comments
         if not line or line.startswith('!'):
             continue
         
-        # Top-N parsing
         if is_topn and ',' in line:
             parts = line.split(',', 1)
             if len(parts) > 1:
                 dom = normalize_domain(parts[1])
                 if dom:
-                    domains.append(dom)
+                    block_domains.append(dom)
             continue
         
         parts = line.split()
@@ -110,24 +171,16 @@ def read_domains(source, is_topn=False, is_verbose=False):
             
         first_token = parts[0]
         
-        # Check for HOSTS syntax
         if is_valid_ip(first_token):
             if first_token in NULL_IPS:
-                # Parse all domains following the null/localhost IP
                 for part in parts[1:]:
-                    dom = normalize_domain(part)
-                    if dom:
-                        domains.append(dom)
-            # If it's an IP but not a null IP, skip the entry entirely
+                    process_parsed(parse_domain_token(part), part)
             continue
         
-        # Standard Domain or Adblock parsing
-        dom = normalize_domain(first_token)
-        if dom:
-            domains.append(dom)
+        process_parsed(parse_domain_token(first_token), first_token)
             
-    log_msg(f"Loaded {len(domains):,} domains.", is_verbose)    
-    return domains
+    log_msg(f"Loaded {len(block_domains):,} blocks, {len(allow_domains):,} allows.", is_verbose)    
+    return block_domains, allow_domains, denyallow_overrides
 
 def get_parents(domain):
     """Yields the domain and all its parent domains using fast string slicing."""
@@ -148,40 +201,43 @@ def domain_sort_key(item):
 
 def main():
     parser = argparse.ArgumentParser(description="Optimize a highly efficient DNS blocklist.")
-    parser.add_argument("--blocklist", nargs='+', required=True, 
-                        help="Path(s) or URL(s) to the DNS blocklist(s)")
-    parser.add_argument("--allowlist", nargs='+', 
-                        help="Optional path(s) or URL(s) to the DNS allowlist(s)")
-    parser.add_argument("--topnlist", nargs='+', 
-                        help="Optional path(s) or URL(s) to Top-N list(s)")
-    parser.add_argument("--suppress-comments", action="store_true", 
-                        help="Suppress the audit log of removed domains in the output")
-    parser.add_argument("-v", "--verbose", action="store_true", 
-                        help="Show progress and statistics on STDERR")
+    parser.add_argument("--blocklist", nargs='+', required=True, help="Path(s) or URL(s) to the DNS blocklist(s)")
+    parser.add_argument("--allowlist", nargs='+', help="Optional path(s) or URL(s) to the DNS allowlist(s)")
+    parser.add_argument("--topnlist", nargs='+', help="Optional path(s) or URL(s) to Top-N list(s)")
+    parser.add_argument("-o", "--output", choices=["domain", "hosts", "adblock"], default="domain", 
+                        help="Output format: 'domain' (default), 'hosts', or 'adblock'")
+    parser.add_argument("--suppress-comments", action="store_true", help="Suppress the audit log of removed domains")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Show progress and statistics on STDERR")
     args = parser.parse_args()
 
     v = args.verbose
 
+    blocklist_domains = []
+    allowlist_domains = set()
+    denyallow_overrides = set()
+
     try:
-        # Consolidate all provided blocklists
-        blocklist_domains = []
         if v: log_msg("--- Stage 1: Consolidating Blocklists ---", v)
         for bl_source in args.blocklist:
-            blocklist_domains.extend(read_domains(bl_source, is_verbose=v))
+            b, a, d = read_domains(bl_source, is_verbose=v)
+            blocklist_domains.extend(b)
+            allowlist_domains.update(a)
+            denyallow_overrides.update(d)
         
-        # Consolidate all provided allowlists
-        allowlist_domains = set()
         if args.allowlist:
             if v: log_msg("--- Stage 2: Consolidating Allowlists ---", v)
             for al_source in args.allowlist:
-                allowlist_domains.update(read_domains(al_source, is_verbose=v))
+                b, a, d = read_domains(al_source, force_allow=True, is_verbose=v)
+                blocklist_domains.extend(b)
+                allowlist_domains.update(a)
+                denyallow_overrides.update(d)
         
-        # Consolidate all provided Top-N lists
         topn_domains = set()
         if args.topnlist:
             if v: log_msg("--- Stage 3: Consolidating Top-N Lists ---", v)
             for topn_source in args.topnlist:
-                topn_domains.update(read_domains(topn_source, is_topn=True, is_verbose=v))
+                b, _, _ = read_domains(topn_source, is_topn=True, is_verbose=v)
+                topn_domains.update(b)
             
     except Exception as e:
         print(f"Error reading source data: {e}", file=sys.stderr)
@@ -190,7 +246,7 @@ def main():
     log_msg(f"--- Stage 4: Preparing for Deduplication ---", v)
     log_msg(f"Sorting {len(blocklist_domains):,} domains by depth...", v)
 
-    # OPTIMIZATION 1: Sort by depth guarantees parents are processed before subdomains.
+    # Sort by depth guarantees parents are processed before subdomains.
     blocklist_domains.sort(key=lambda d: d.count('.'))
 
     log_msg(f"--- Stage 5: Processing & Optimizing ---", v)
@@ -203,14 +259,17 @@ def main():
     stats_topn = 0
     stats_deduped = 0
 
-    # OPTIMIZATION 2: Single-pass processing.
     for domain in blocklist_domains:
         domain_parents = list(get_parents(domain))
         
-        # Check against consolidated Allowlist
+        # Check against consolidated Allowlist with Denyallow priority
         if allowlist_domains:
             is_allowlisted = False
             for parent in domain_parents:
+                if parent in denyallow_overrides:
+                    # Log when an exception override blocks an allowlist action
+                    log_msg(f"Enforced exception override : {domain} (Protected from allowlist rule on '{parent}')", v)
+                    break
                 if parent in allowlist_domains:
                     removed_log.append(f"# {domain} - Removed because of Allowlisted by {parent}")
                     is_allowlisted = True
@@ -247,12 +306,62 @@ def main():
 
     # Output printing phase
     log_msg(f"--- Stage 6: Generating Output ---", v)
-    output_lines = final_blocklist
-    if not args.suppress_comments:
-        output_lines.extend(removed_log)
+    
+    # Print Adblock headers
+    if args.output == "adblock":
+        print("[Adblock Plus]")
+        print(f"! Version: {int(time.time())}")
+    
+    # Build Adblock specific structures if needed
+    adblock_rules = {}
+    standalone_allows = []
+    
+    if args.output == "adblock":
+        for dom in active_blocks:
+            adblock_rules[dom] = []
+            
+        for allow_dom in allowlist_domains:
+            has_blocked_parent = False
+            for parent in get_parents(allow_dom):
+                if parent != allow_dom and parent in active_blocks:
+                    # Map the allowlisted subdomain to its blocked parent as a $denyallow exception
+                    adblock_rules[parent].append(allow_dom)
+                    has_blocked_parent = True
+                    break 
+            
+            # If the allowed domain doesn't fall under any active block rule, print it standalone
+            if not has_blocked_parent:
+                standalone_allows.append(allow_dom)
 
-    for line in sorted(output_lines, key=domain_sort_key):
-        print(line)
+    # Output standalone allows first (standard adblock list convention)
+    if args.output == "adblock" and standalone_allows:
+        for dom in sorted(standalone_allows, key=domain_sort_key):
+            print(f"@@||{dom}^")
+
+    # Combine blocks and comments for sorted output
+    output_items = list(final_blocklist)
+    if not args.suppress_comments:
+        output_items.extend(removed_log)
+
+    for item in sorted(output_items, key=domain_sort_key):
+        if item.startswith('#'):
+            # Format comments based on output type
+            if args.output == "adblock":
+                print(f"! {item[2:]}")
+            else:
+                print(item)
+        else:
+            # Format domains based on output type
+            if args.output == "hosts":
+                print(f"0.0.0.0 {item}")
+            elif args.output == "adblock":
+                exceptions = adblock_rules.get(item, [])
+                if exceptions:
+                    print(f"||{item}^$denyallow={'|'.join(sorted(exceptions))}")
+                else:
+                    print(f"||{item}^")
+            else:
+                print(item)
 
     if v:
         log_msg("===========================================", v)
