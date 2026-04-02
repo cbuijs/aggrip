@@ -38,7 +38,7 @@ A collection of highly optimized Python 3 command-line utilities for processing,
   * Outputs dynamically to Plain Domain, HOSTS, or standard Adblock format.
   * Supports writing directly to dedicated blocklist and allowlist files.
   
-  *(Note: This is the only tool that takes standard command-line arguments instead of STDIN. It supports passing multiple files per argument. See `CLEAN-DOM-MANUAL.md` for advanced usage).*
+  *(Note: This is the only tool that takes standard command-line arguments instead of STDIN. It supports passing multiple files per argument. See [CLEAN-DOM-MANUAL.md](https://github.com/cbuijs/aggrip/blob/master/clean-dom-manual.md) for advanced usage).*
 
 * **`undup.py`**
   Deduplicates a DNS domain list by removing unnecessary subdomains if the parent domain already exists in the list (e.g., removes `sub.example.com` if `example.com` is present).
