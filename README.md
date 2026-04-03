@@ -38,7 +38,7 @@ A collection of highly optimized Python 3 command-line utilities for processing,
   * Outputs dynamically to Plain Domain, HOSTS, or standard Adblock format.
   * Supports writing directly to dedicated blocklist and allowlist files.
   
-  *(Note: This is the only tool that takes standard command-line arguments instead of STDIN. It supports passing multiple files per argument. See [CLEAN-DOM-MANUAL.md](https://github.com/cbuijs/aggrip/blob/master/clean-dom-manual.md) for advanced usage).*
+  *(Note: This is the only tool that takes standard command-line arguments instead of STDIN. It supports passing multiple files per argument. See [clean-dom-manual.md](https://github.com/cbuijs/aggrip/blob/master/clean-dom-manual.md) for advanced usage).*
 
 * **`clean-dom2.py`**
   Performs the exact same DNS optimization, routing, and deduplication as `clean-dom.py`, but utilizes high-speed bulk memory reads and a reverse-string `O(N log N)` sorting algorithm.
