@@ -37,7 +37,7 @@ A collection of highly optimized Python 3 command-line utilities for processing,
   *Note: Faster execution but requires more memory.*
 
 * **`range2cidr.py`**
-  Converts and aggregates IP-Range syntax (e.g., `192.168.1.0-192.168.1.255`) into standard CIDR notation. Supports both space and dash delimiters.
+  Converts and aggregates IP-Range syntax (e.g., `192.168.1.0-192.168.1.255`) into standard CIDR notation. Supports both space and dash delimiters. See also **`getip.py`** for a more versatile version.
 
 * **`range2cidr2.py`**
   Performs the same IP-Range syntax conversion as `range2cidr.py`, but utilizes bulk text ingestion and bulk output buffering. 
