@@ -19,6 +19,9 @@
 * **Multiple Output Formats:** Export the final, optimized list as plain domains, a valid HOSTS file, or a standard Adblock configuration file.
 * **Direct File Exporting:** Natively write the final blocklist and the parsed allowlist into dedicated files, completely bypassing the need for shell redirects (`>`).
 
+### Performance Note: `clean-dom2.py`
+For enterprise-scale blocklists, a memory-optimized alternative (`clean-dom2.py`) is included. It utilizes bulk memory reads and an `O(N log N)` reverse-string sort to instantly process Top-N filtering, Allowlist cross-referencing, and Deduplication in a single pass. Both scripts are functionally identical and share the exact same command-line syntax; use `clean-dom2.py` when speed is critical and RAM overhead is not a concern.
+
 ---
 
 ## Command-Line Arguments

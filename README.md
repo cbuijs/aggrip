@@ -40,6 +40,10 @@ A collection of highly optimized Python 3 command-line utilities for processing,
   
   *(Note: This is the only tool that takes standard command-line arguments instead of STDIN. It supports passing multiple files per argument. See [CLEAN-DOM-MANUAL.md](https://github.com/cbuijs/aggrip/blob/master/clean-dom-manual.md) for advanced usage).*
 
+* **`clean-dom2.py`**
+  Performs the exact same DNS optimization, routing, and deduplication as `clean-dom.py`, but utilizes high-speed bulk memory reads and a reverse-string `O(N log N)` sorting algorithm.
+  *Note: Significantly faster execution for massive blocklists, but consumes more RAM. Identical command-line arguments.*
+
 * **`undup.py`**
   Deduplicates a DNS domain list by removing unnecessary subdomains if the parent domain already exists in the list (e.g., removes `sub.example.com` if `example.com` is present).
 
