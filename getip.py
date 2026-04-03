@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 '''
 ==========================================================================
- getip.py v0.10-20260403 Copyright 2019-2026 by cbuijs@chrisbuijs.com
+ getip.py v0.11-20260403 Copyright 2019-2026 by cbuijs@chrisbuijs.com
 ==========================================================================
  Changes/Fixes:
+ - v0.11-20260403: Added strict mode parameter (-s) to prevent CIDR truncation.
  - v0.10-20260403: Initial getip.py - Grep, aggregate, and sort IP/CIDRs.
 ==========================================================================
 
@@ -14,7 +15,7 @@
     dropping any trailing text or arguments.
  2. With --anywhere (-a), acts like `grep -o`, scanning the entire line.
  3. Converts IP ranges (dash or space separated) to CIDRs natively.
- 4. Truncates invalid host bits in CIDRs via strict=False.
+ 4. Truncates invalid host bits in CIDRs via strict=False (override with -s).
  5. Aggregates and IP-sorts the final list using ipaddress.
 
 ==========================================================================
@@ -27,6 +28,7 @@ import ipaddress
 def main():
     parser = argparse.ArgumentParser(description="Grep, aggregate, and sort IP/CIDRs.")
     parser.add_argument("-a", "--anywhere", action="store_true", help="Find IPs/CIDRs anywhere in the line")
+    parser.add_argument("-s", "--strict", action="store_true", help="Strict mode: drop invalid CIDRs instead of truncating host bits")
     args = parser.parse_args()
 
     v4_networks = []
@@ -41,8 +43,8 @@ def main():
             token = tokens[i]
             
             try:
-                # Attempt to parse as an individual IP or CIDR (strict=False truncates invalid host bits)
-                net = ipaddress.ip_network(token, strict=False)
+                # Parse network. strict=args.strict will raise ValueError on dirty host bits if enabled
+                net = ipaddress.ip_network(token, strict=args.strict)
                 is_single_ip = ('/' not in token)
                 is_range = False
 

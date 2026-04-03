@@ -23,6 +23,13 @@ A collection of highly optimized Python 3 command-line utilities for processing,
   *Note: Faster execution but requires more memory.*
 
 * **`getip.py`**
+  A powerful extraction tool that acts as an IP-aware `grep`. It reads input and explicitly targets valid IP Addresses, IP-Ranges (both space and dash-separated), and CIDRs while automatically discarding garbage text. Invalid CIDR host bits are auto-truncated by default, but can be strictly rejected by using the `-s` / `--strict` parameter. Defaults to strictly validating the beginning of a line, but supports an "anywhere" (`-a` / `--anywhere`) deep-scan parameter. Outputs a strictly consolidated, deduplicated, and IP-sorted list of native CIDRs.
+
+* **`getip2.py`**
+  Performs the exact same extraction, consolidation, and formatting as `getip.py` (including the `-s` / `--strict` capabilities), but utilizes high-speed bulk line reads, bulk string buffers, and fast-character heuristic skipping to dramatically speed up deep scans over large texts.
+  *Note: Faster execution but requires more memory.*
+
+* **`getip.py`**
   A powerful extraction tool that acts as an IP-aware `grep`. It reads input and explicitly targets valid IP Addresses, IP-Ranges (both space and dash-separated), and CIDRs while automatically discarding garbage text. Invalid CIDR host bits are auto-truncated. Defaults to strictly validating the beginning of a line but supports an "anywhere" (`-a` / `--anywhere`) deep-scan parameter. Outputs a strictly consolidated, deduplicated, and IP-sorted list of native CIDRs.
 
 * **`getip2.py`**
@@ -57,7 +64,7 @@ A collection of highly optimized Python 3 command-line utilities for processing,
   * Outputs dynamically to Plain Domain, HOSTS, or standard Adblock format.
   * Supports writing directly to dedicated blocklist and allowlist files.
   
-  *(Note: This is the only tool that takes standard command-line arguments instead of STDIN. It supports passing multiple files per argument. See [clean-dom-manual.md](https://github.com/cbuijs/aggrip/blob/master/clean-dom-manual.md) for advanced usage).*
+  *(Note: This is the only tool that takes mandatory standard command-line arguments instead of just processing input from STDIN. It supports passing multiple files per argument. See [clean-dom-manual.md](https://github.com/cbuijs/aggrip/blob/master/clean-dom-manual.md) for advanced usage).*
 
 * **`clean-dom2.py`**
   Performs the exact same DNS optimization, routing, and deduplication as `clean-dom.py`, but utilizes high-speed bulk memory reads and a reverse-string `O(N log N)` sorting algorithm.
@@ -81,7 +88,7 @@ A collection of highly optimized Python 3 command-line utilities for processing,
 
 ## Usage Instructions
 
-With the exception of `clean-dom.py`, these tools do NOT accept command-line file parameters. They are designed to be chained together using standard input (`STDIN`) and standard output (`STDOUT`).
+With the exception of `clean-dom.py`, these tools do NOT need mandatory command-line file parameters. They are designed to be chained together using standard input (`STDIN`) and standard output (`STDOUT`) based on common/best practices.x.
 
 ### Pipeline Examples:
 

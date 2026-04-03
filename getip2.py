@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 '''
 ==========================================================================
- getip2.py v0.10-20260403 Copyright 2019-2026 by cbuijs@chrisbuijs.com
+ getip2.py v0.11-20260403 Copyright 2019-2026 by cbuijs@chrisbuijs.com
 ==========================================================================
  Changes/Fixes:
+ - v0.11-20260403: Added strict mode parameter (-s) to prevent CIDR truncation.
  - v0.10-20260403: Initial getip2.py - Fast memory-heavy version utilizing
                    bulk reads, fast character heuristics, and bulk writes.
 ==========================================================================
@@ -27,6 +28,7 @@ def is_fast_ip(token):
 def main():
     parser = argparse.ArgumentParser(description="Grep, aggregate, and sort IP/CIDRs (Fast Version).")
     parser.add_argument("-a", "--anywhere", action="store_true", help="Find IPs/CIDRs anywhere in the line")
+    parser.add_argument("-s", "--strict", action="store_true", help="Strict mode: drop invalid CIDRs instead of truncating host bits")
     args = parser.parse_args()
 
     v4_networks = []
@@ -58,7 +60,8 @@ def main():
                 break
                 
             try:
-                net = ipaddress.ip_network(token, strict=False)
+                # Parse network via strict enforcement toggle
+                net = ipaddress.ip_network(token, strict=args.strict)
                 is_single_ip = ('/' not in token)
                 is_range = False
 
