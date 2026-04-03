@@ -18,6 +18,10 @@ A collection of highly optimized Python 3 command-line utilities for processing,
 * **`aggrip-asn.py`**
   Aggregates IPs into CIDR lists based on a composite identifier. It reads tab-separated input (`CIDR \t ID \t Name`), sorts by ID/Name, groups them, and merges the CIDRs without losing the identifying metadata.
 
+* **`aggrip-asn2.py`**
+  Performs the exact same composite identifier aggregation as `aggrip-asn.py`, but utilizes high-speed bulk memory reads, pre-computed integer metadata sorting, and tuple mapping to execute significantly faster. 
+  *Note: Faster execution but requires more memory.*
+
 * **`getip.py`**
   A powerful extraction tool that acts as an IP-aware `grep`. It reads input and explicitly targets valid IP Addresses, IP-Ranges (both space and dash-separated), and CIDRs while automatically discarding garbage text. Invalid CIDR host bits are auto-truncated. Defaults to strictly validating the beginning of a line but supports an "anywhere" (`-a` / `--anywhere`) deep-scan parameter. Outputs a strictly consolidated, deduplicated, and IP-sorted list of native CIDRs.
 
@@ -28,8 +32,16 @@ A collection of highly optimized Python 3 command-line utilities for processing,
 * **`range2cidr.py`**
   Converts and aggregates IP-Range syntax (e.g., `192.168.1.0-192.168.1.255`) into standard CIDR notation. Supports both space and dash delimiters.
 
+* **`range2cidr2.py`**
+  Performs the same IP-Range syntax conversion as `range2cidr.py`, but utilizes bulk text ingestion and bulk output buffering. 
+  *Note: Faster execution but requires more memory.*
+
 * **`revip.py`**
   Converts a list of IP addresses or CIDRs into their corresponding reverse DNS lookup names (`in-addr.arpa` for IPv4, and `ip6.arpa` for IPv6).
+
+* **`revip2.py`**
+  Performs the same reverse DNS lookup name generation as `revip.py`, but uses bulk memory chunking and optimized string slicing to dramatically reduce processing time on large datasets.
+  *Note: Faster execution but requires more memory.*
 
 ### DNS Domain Tools
 
