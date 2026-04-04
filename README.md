@@ -29,13 +29,6 @@ A collection of highly optimized Python 3 command-line utilities for processing,
   Performs the exact same extraction, consolidation, and formatting as `getip.py` (including the `-s` / `--strict` capabilities), but utilizes high-speed bulk line reads, bulk string buffers, and fast-character heuristic skipping to dramatically speed up deep scans over large texts.
   *Note: Faster execution but requires more memory.*
 
-* **`getip.py`**
-  A powerful extraction tool that acts as an IP-aware `grep`. It reads input and explicitly targets valid IP Addresses, IP-Ranges (both space and dash-separated), and CIDRs while automatically discarding garbage text. Invalid CIDR host bits are auto-truncated. Defaults to strictly validating the beginning of a line but supports an "anywhere" (`-a` / `--anywhere`) deep-scan parameter. Outputs a strictly consolidated, deduplicated, and IP-sorted list of native CIDRs.
-
-* **`getip2.py`**
-  Performs the exact same extraction, consolidation, and formatting as `getip.py`, but utilizes high-speed bulk line reads, bulk string buffers, and fast-character heuristic skipping to dramatically speed up deep scans over large texts.
-  *Note: Faster execution but requires more memory.*
-
 * **`range2cidr.py`**
   Converts and aggregates IP-Range syntax (e.g., `192.168.1.0-192.168.1.255`) into standard CIDR notation. Supports both space and dash delimiters. See also **`getip.py`** for a more versatile version.
 
