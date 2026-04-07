@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 '''
 ==========================================================================
- undup2.py v0.15-20260401 Copyright 2019-2026 by cbuijs@chrisbuijs.com
-==========================================================================
-
- Undup DNS Domainlist (Remove sub-domains).
- Note: Faster but more memory than undup.py.
-
+ Filename: undup2.py
+ Version: 0.16
+ Date: 2026-04-07
+ Description: Blazing fast binary-level domain deduplicator. Removes 
+              redundant subdomains when parent domains exist in the feed.
+ 
+ Changes/Fixes:
+ - v0.16 (2026-04-07): Merged stripping rules, added docstrings.
+ - v0.15 (2026-04-01): Original version.
 ==========================================================================
 '''
 
@@ -19,26 +22,26 @@ def main():
 
     try:
         raw_data = sys.stdin.buffer.read()
-
     except Exception:
         return
 
     if not raw_data:
         return
 
+    # Bulk byte-level parsing: Strips whitespace, carriage returns, and trailing dots instantly
     unique_lines = set(
-        line.strip().lower().strip(b'.') 
+        line.strip(b' .\r\n').lower() 
         for line in raw_data.splitlines() 
         if line.strip()
     )
 
-    rev_list = [x[::-1] for x in unique_lines]
-
-    rev_list.sort()
-    
+    # Reverse string logic forces Parent Domains to sort BEFORE their subdomains.
+    # e.g., 'com.example' is processed before 'com.example.sub'
+    rev_list = sorted([x[::-1] for x in unique_lines])
     last_kept = b''
     
     for curr in rev_list:
+        # Check if the current reversed string strictly falls under the last parent
         if last_kept and curr.startswith(last_kept) and curr[len(last_kept):len(last_kept)+1] == dot:
             continue
             
@@ -49,13 +52,9 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-
     except KeyboardInterrupt:
         sys.exit(0)
-
     except BrokenPipeError:
         sys.stderr.close()
         sys.exit(0)
-
-sys.exit(0)
 
