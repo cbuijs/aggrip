@@ -85,6 +85,16 @@ A collection of highly optimized Python 3 command-line utilities for processing,
   Performs the same function as `undup.py` but reads data in raw binary/byte blocks. 
   *Note: Faster execution but requires more memory.*
 
+<<<<<<< HEAD
+=======
+* **`domsort.py`**
+  Reads STDIN, identifies logical document sections based on non-domain text (such as comments or blank lines), and strictly validates and sorts domains from the root level down (tree-wise/TLD-first) *within* those sections. Perfectly preserves the original document layout. Supports a `-l` / `--less-strict` flag to permit underscores (`_`) and asterisks (`*`) in domains (e.g., wildcards or SRV records) without disrupting the alphabetical sort order.
+
+* **`domsort2.py`**
+  Performs the exact same segmented layout-preserving domain sort and optional less-strict validation (`-l` / `--less-strict`) as `domsort.py`, but utilizes high-speed bulk memory reads, fast-path text skipping, and segmented array sorting. 
+  *Note: Faster execution but requires more memory.*
+
+>>>>>>> 226fa6974015aad67daa7986a072e3b57a6a7c31
 ---
 
 ## Usage Instructions
