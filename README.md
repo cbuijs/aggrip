@@ -1,4 +1,4 @@
-# Aggrip & DNS Domain Utilities
+# Aggrip  - IP, CIDR and DNS Domain Utilities
 
 A collection of highly optimized Python 3 command-line utilities for processing, aggregating, and sorting IP addresses, CIDR networks, and DNS domain lists. These tools are designed for high-performance pipeline operations in Unix-like environments.
 
