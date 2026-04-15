@@ -29,6 +29,13 @@ A collection of highly optimized Python 3 command-line utilities for processing,
   Performs the exact same extraction, consolidation, and formatting as `getip.py` (including the `-s` / `--strict` capabilities), but utilizes high-speed bulk line reads, bulk string buffers, and fast-character heuristic skipping to dramatically speed up deep scans over large texts.
   *Note: Faster execution but requires more memory.*
 
+* **`ipsort.py`**
+  Reads STDIN, identifies logical document sections based on non-IP text (such as comments, headers, or blank lines), and performs a strict IP-aware sort (IPv4 first, then IPv6) *within* those sections. Perfectly preserves the original document layout and section comments. Optionally supports CIDR aggregation within the preserved sections using the `-a` / `--aggregate` flag.
+
+* **`ipsort2.py`**
+  Performs the exact same segmented layout-preserving IP sort and optional aggregation (`-a` / `--aggregate`) as `ipsort.py`, but utilizes high-speed bulk memory reads, heuristic text skipping, and segmented array sorting. 
+  *Note: Faster execution but requires more memory.*
+
 * **`range2cidr.py`**
   Converts and aggregates IP-Range syntax (e.g., `192.168.1.0-192.168.1.255`) into standard CIDR notation. Supports both space and dash delimiters. See also **`getip.py`** for a more versatile version.
 
@@ -89,6 +96,8 @@ With the exception of `clean-dom.py`, these tools do NOT need mandatory command-
     cat raw_ips.txt | ./aggrip.py > optimized_cidrs.txt
     cat ranges.txt | ./range2cidr.py | ./aggrip.py
     cat domains.txt | ./undup.py | ./domsort.py > clean_domains.txt
+    cat mixed_ips_and_comments.txt | ./ipsort.py > nicely_sorted_sections.txt
+    cat messy_sections.txt | ./ipsort2.py -a > aggregated_sections.txt
 
 ### For `clean-dom.py`:
 
