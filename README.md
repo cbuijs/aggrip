@@ -91,7 +91,7 @@ With the exception of `clean-dom.py`, these tools do NOT need mandatory command-
 
 ### For `clean-dom.py`:
 
-    ./clean-dom.py --blocklist bl1.txt [https://example.com/bl2.txt](https://example.com/bl2.txt) \
+    ./clean-dom.py --blocklist bl1.txt https://example.com/bl2.txt \
                    [--allowlist al1.txt] \
                    [--topnlist top1.txt] \
                    [-o {domain,hosts,adblock}] \
