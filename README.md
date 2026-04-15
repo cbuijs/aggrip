@@ -110,6 +110,7 @@ With the exception of `clean-dom.py`, these tools do NOT need mandatory command-
 
 Some tools (`aggrip.py`, `aggrip-asn.py`) require the external `netaddr` library.
 To install or upgrade the required dependencies, run:
-
-    ```pip install -r requirements.txt```
+```
+    pip install -r requirements.txt
+```
 
