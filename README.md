@@ -71,18 +71,18 @@ A collection of highly optimized Python 3 command-line utilities for processing,
   Performs the exact same DNS optimization, routing, and deduplication as `clean-dom.py`, but utilizes high-speed bulk memory reads and a reverse-string `O(N log N)` sorting algorithm.
   *Note: Significantly faster execution for massive blocklists, but consumes more RAM. Identical command-line arguments.*
 
+* **`domsort.py`**
+  Reads STDIN, identifies logical document sections based on non-domain text (such as comments or blank lines), and strictly validates and sorts domains from the root level down (tree-wise/TLD-first) *within* those sections. Perfectly preserves the original document layout. Supports a `-l` / `--less-strict` flag to permit underscores (`_`) and asterisks (`*`) in domains (e.g., wildcards or SRV records) without disrupting the alphabetical sort order.
+
+* **`domsort2.py`**
+  Performs the exact same segmented layout-preserving domain sort and optional less-strict validation (`-l` / `--less-strict`) as `domsort.py`, but utilizes high-speed bulk memory reads, fast-path text skipping, and segmented array sorting. 
+  *Note: Faster execution but requires more memory.*
+
 * **`undup.py`**
   Deduplicates a DNS domain list by removing unnecessary subdomains if the parent domain already exists in the list (e.g., removes `sub.example.com` if `example.com` is present).
 
 * **`undup2.py`**
   Performs the same function as `undup.py` but reads data in raw binary/byte blocks. 
-  *Note: Faster execution but requires more memory.*
-
-* **`domsort.py`**
-  Strictly validates and sorts a domain list from the root level down (tree-wise/TLD-first). Example: `com` -> `example` -> `sub`.
-
-* **`domsort2.py`**
-  Performs the same function as `domsort.py` but utilizes C-level regex filtering and bulk memory reads. 
   *Note: Faster execution but requires more memory.*
 
 ---
@@ -98,6 +98,7 @@ With the exception of `clean-dom.py`, these tools do NOT need mandatory command-
     cat domains.txt | ./undup.py | ./domsort.py > clean_domains.txt
     cat mixed_ips_and_comments.txt | ./ipsort.py > nicely_sorted_sections.txt
     cat messy_sections.txt | ./ipsort2.py -a > aggregated_sections.txt
+    cat wildcard_zones.txt | ./domsort2.py -l > clean_zones.txt
 
 ### For `clean-dom.py`:
 
