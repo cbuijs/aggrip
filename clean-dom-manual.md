@@ -1,6 +1,6 @@
 # CLEAN-DOM MANUAL
 
-`clean-dom.py` is a highly efficient, multi-format DNS blocklist optimization and deduplication tool. It is designed to ingest massive blocklists, cross-reference them against allowlists, safely deduplicate redundant subdomains, and export the optimized results into formats compatible with systems like Pi-hole, AdGuard Home, or unbound.
+`clean-dom.py` is a highly efficient, multi-format DNS blocklist optimization and deduplication tool. It is designed to ingest massive blocklists, cross-reference them against allowlists, safely deduplicate redundant subdomains, optimize allowlists on the fly, and export the optimized results into formats compatible with systems like Pi-hole, AdGuard Home, or unbound.
 
 ## Table of Contents
 1. [Core Features](#core-features)
@@ -16,6 +16,7 @@
 * **Dynamic Adblock Routing:** Automatically detects Adblock allowlist rules (`@@||`) inside blocklist feeds and routes them dynamically.
 * **Strict Exception Handling:** Fully supports the Adblock `$denyallow` modifier, ensuring specific subdomains remain blocked or allowed regardless of their parent domain's status.
 * **Tree-Based Deduplication:** Sorts domains by depth (TLD -> Subdomain) to guarantee that if a parent domain is blocked, all redundant subdomains are stripped out to save memory.
+* **Allowlist Optimization:** Optionally strips out allowlisted domains that do not actively match or neutralize any targeted blocklist items, keeping exported exception lists perfectly lean.
 * **Multiple Output Formats:** Export the final, optimized list as plain domains, a valid HOSTS file, or a standard Adblock configuration file.
 * **Direct File Exporting:** Natively write the final blocklist and the parsed allowlist into dedicated files, completely bypassing the need for shell redirects (`>`).
 
@@ -34,6 +35,7 @@ For enterprise-scale blocklists, a memory-optimized alternative (`clean-dom2.py`
 | `-o`, `--output` | Optional | Output format. Choices: `domain` (default), `hosts`, `adblock`. |
 | `--out-blocklist` | Optional | File path to write the final blocklist to. If omitted, prints to STDOUT. |
 | `--out-allowlist` | Optional | File path to write the parsed allowlist to. |
+| `--optimize-allowlist` | Optional | Drops unused allowlist entries that do not match or neutralize any actively blocked targets. |
 | `--suppress-comments`| Optional | Removes the audit log (lines starting with `#`) explaining why domains were removed. |
 | `-v`, `--verbose` | Optional | Prints loading progress, routing events, and a final statistics summary to STDERR. |
 
@@ -67,4 +69,14 @@ To ensure efficiency, all rules are evaluated from the top-down:
 Read two local blocklists, apply an allowlist, and print the deduplicated plain domain list to the screen.
 ```bash
 ./clean-dom.py --blocklist ads.txt tracking.txt --allowlist whitelist.txt
+```
+### 2. Strict Exporting with Allowlist Optimization
+Ingest URLs and local lists, dynamically drop any unused exceptions from the allowlist, and output both block and allow targets to their own files.
 
+```bash
+./clean-dom.py --blocklist ads.txt [https://example.com/malware.txt](https://example.com/malware.txt) \
+               --allowlist whitelist.txt \
+               --optimize-allowlist \
+               --out-blocklist final_blocks.txt \
+               --out-allowlist final_allows.txt
+```

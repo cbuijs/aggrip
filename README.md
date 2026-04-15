@@ -54,6 +54,7 @@ A collection of highly optimized Python 3 command-line utilities for processing,
   * Dynamically routes inline Adblock allowlist rules (`@@||domain.com^`) found inside blocklist files directly to the allowlist.
   * Fully parses and enforces Adblock `$denyallow` modifiers as strict exceptions to both block and allowlist rules.
   * Automatically normalizes inputs by lowercasing, trimming leading/trailing dots, and removing prefix wildcards (`*.domain.com` -> `domain.com`).
+  * Optionally drops unused allowlist entries (`--optimize-allowlist`) to ensure exported allowlists are strictly utilized. 
   * Outputs dynamically to Plain Domain, HOSTS, or standard Adblock format.
   * Supports writing directly to dedicated blocklist and allowlist files.
   
@@ -81,7 +82,7 @@ A collection of highly optimized Python 3 command-line utilities for processing,
 
 ## Usage Instructions
 
-With the exception of `clean-dom.py`, these tools do NOT need mandatory command-line file parameters. They are designed to be chained together using standard input (`STDIN`) and standard output (`STDOUT`) based on common/best practices.x.
+With the exception of `clean-dom.py`, these tools do NOT need mandatory command-line file parameters. They are designed to be chained together using standard input (`STDIN`) and standard output (`STDOUT`) based on common/best practices.
 
 ### Pipeline Examples:
 
@@ -97,6 +98,7 @@ With the exception of `clean-dom.py`, these tools do NOT need mandatory command-
                    [-o {domain,hosts,adblock}] \
                    [--out-blocklist out_bl.txt] \
                    [--out-allowlist out_al.txt] \
+                   [--optimize-allowlist] \
                    [--suppress-comments] \
                    [-v | --verbose]
 
@@ -109,5 +111,5 @@ With the exception of `clean-dom.py`, these tools do NOT need mandatory command-
 Some tools (`aggrip.py`, `aggrip-asn.py`) require the external `netaddr` library.
 To install or upgrade the required dependencies, run:
 
-    pip install -r requirements.txt
+    ```pip install -r requirements.txt```
 
