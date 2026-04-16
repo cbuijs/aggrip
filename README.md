@@ -123,6 +123,7 @@ With the exception of `clean-dom.py`, these tools do NOT need mandatory command-
     cat messy_sections.txt | ./ipsort2.py -a > aggregated_sections.txt
     cat wildcard_zones.txt | ./domsort2.py -l -a -r > clean_zones.txt
     cat messy_dump_of_everything.log | ./categorize2.py -i > flagged_inventory.txt
+    cat ips.list | ./ipsort.py -a | ./revip.py | ./categorize.py > neat_categorized_rev_ips.txt
 
 ### For `clean-dom.py`:
 
