@@ -74,7 +74,7 @@ Read two local blocklists, apply an allowlist, and print the deduplicated plain 
 Ingest URLs and local lists, dynamically drop any unused exceptions from the allowlist, and output both block and allow targets to their own files.
 
 ```bash
-./clean-dom.py --blocklist ads.txt [https://example.com/malware.txt](https://example.com/malware.txt) \
+./clean-dom.py --blocklist ads.txt https://example.com/malware.txt \
                --allowlist whitelist.txt \
                --optimize-allowlist \
                --out-blocklist final_blocks.txt \
