@@ -90,8 +90,7 @@ A collection of highly optimized Python 3 command-line utilities for processing,
 ## Usage Instructions
 
 With the exception of `clean-dom.py`, these tools do NOT need mandatory command-line file parameters. They are designed to be chained together using standard input (`STDIN`) and standard output (`STDOUT`) based on common/best practices.
-
-**You can fire up any of the scripts with `-h` or `--help` to get detailed information on available command-line parameters.**
+**NOTE:** You can fire up any of the scripts with `-h` or `--help` to get detailed information on available command-line parameters.
 
 ### Pipeline Examples:
 
