@@ -2,19 +2,16 @@
 '''
 ==========================================================================
  Filename: getdom.py
- Version: 0.13
- Date: 2026-04-16 09:45 CEST
+ Version: 0.16
+ Date: 2026-04-16 15:00 CEST
  Description: Greps DNS domains from various input syntaxes (Plain, Adblock,
               HOSTS, and URLs). Discards empty lines, comments, and non-domain 
               text. Supports customizable output formats.
  
  Changes/Fixes:
- - v0.13 (2026-04-16): Added -o/--output parameter (plain, adblock, hosts).
- - v0.12 (2026-04-16): Enhanced URL parsing to strip ports and strictly 
-                       enforce a plain domain list output format.
- - v0.11 (2026-04-16): Added $denyallow modifier routing, and explicitly 
-                       handled multiple domains per line in HOSTS syntax.
- - v0.10 (2026-04-16): Initial getdom.py implementation.
+ - v0.16 (2026-04-16): Added $TTL and fake SOA record to RPZ header.
+ - v0.15 (2026-04-16): Updated RPZ output to include wildcard subdomains.
+ - v0.14 (2026-04-16): Added dnsmasq, unbound, and rpz output formats.
 ==========================================================================
 '''
 
@@ -48,10 +45,13 @@ def main():
     parser = argparse.ArgumentParser(description="Grep DNS domains from text inputs.")
     parser.add_argument("-l", "--less-strict", action="store_true", help="Allow underscores (_) and asterisks (*) in domain names")
     parser.add_argument("-a", "--allow", action="store_true", help="Grep only 'allowed' domains (rules starting with @@ or $denyallow exceptions)")
-    parser.add_argument("-o", "--output", choices=["plain", "adblock", "hosts"], default="plain", help="Output format: 'plain' (default), 'adblock', or 'hosts'")
+    parser.add_argument("-o", "--output", choices=["plain", "adblock", "hosts", "dnsmasq", "unbound", "rpz"], default="plain", help="Output format")
     args = parser.parse_args()
     
     active_pattern = LESS_STRICT_PATTERN if args.less_strict else STRICT_PATTERN
+
+    if args.output == "rpz":
+        sys.stdout.write("$TTL 3600\n@ IN SOA localhost. root.localhost. 1 3600 900 2592000 300\n")
     
     try:
         for line in sys.stdin:
@@ -120,11 +120,20 @@ def main():
                     if active_pattern.match(cand) and not is_fast_ip(cand):
                         if args.output == "hosts":
                             sys.stdout.write(f"0.0.0.0 {cand}\n")
+                        elif args.output == "dnsmasq":
+                            if args.allow: sys.stdout.write(f"server=/{cand}/#\n")
+                            else: sys.stdout.write(f"address=/{cand}/0.0.0.0\n")
+                        elif args.output == "unbound":
+                            if args.allow: sys.stdout.write(f"local-zone: \"{cand}\" transparent\n")
+                            else: sys.stdout.write(f"local-zone: \"{cand}\" always_nxdomain\n")
+                        elif args.output == "rpz":
+                            if args.allow: 
+                                sys.stdout.write(f"{cand} CNAME rpz-passthru.\n*.{cand} CNAME rpz-passthru.\n")
+                            else: 
+                                sys.stdout.write(f"{cand} CNAME .\n*.{cand} CNAME .\n")
                         elif args.output == "adblock":
-                            if args.allow:
-                                sys.stdout.write(f"@@||{cand}^\n")
-                            else:
-                                sys.stdout.write(f"||{cand}^\n")
+                            if args.allow: sys.stdout.write(f"@@||{cand}^\n")
+                            else: sys.stdout.write(f"||{cand}^\n")
                         else:
                             sys.stdout.write(f"{cand}\n")
                         

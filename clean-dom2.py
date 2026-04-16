@@ -2,15 +2,17 @@
 '''
 ==========================================================================
  Filename: clean-dom2.py
- Version: 0.24
- Date: 2026-04-15 18:15 CEST
+ Version: 0.27
+ Date: 2026-04-16 15:00 CEST
  Description: Enterprise-grade DNS blocklist optimizer. Ingests massive 
               blocklists, applying cross-references, modifiers ($denyallow), 
               optionally optimizes allowlists, and deduplicates via reverse sort.
  
  Changes/Fixes:
+ - v0.27 (2026-04-16): Added $TTL and fake SOA record to RPZ header.
+ - v0.26 (2026-04-16): Updated RPZ output to include wildcard subdomains.
+ - v0.25 (2026-04-16): Added dnsmasq, unbound, and rpz output formats.
  - v0.24 (2026-04-15): Made allowlist optimization configurable, added logging.
- - v0.23 (2026-04-15): Added logic to drop useless allowlist entries.
 ==========================================================================
 '''
 
@@ -142,7 +144,7 @@ def get_parents(domain):
 
 def domain_sort_key(item):
     """Generates a sorting key for tree-down (TLD to subdomain) formatting output."""
-    if item.startswith('# '):
+    if item.startswith('# ') or item.startswith('; '):
         domain = item[2:].split(' - ', 1)[0]
     else:
         domain = item
@@ -153,7 +155,7 @@ def main():
     parser.add_argument("--blocklist", nargs='+', required=True)
     parser.add_argument("--allowlist", nargs='+')
     parser.add_argument("--topnlist", nargs='+')
-    parser.add_argument("-o", "--output", choices=["domain", "hosts", "adblock"], default="domain")
+    parser.add_argument("-o", "--output", choices=["domain", "hosts", "adblock", "dnsmasq", "unbound", "rpz"], default="domain")
     parser.add_argument("--out-blocklist")
     parser.add_argument("--out-allowlist")
     parser.add_argument("--optimize-allowlist", action="store_true", help="Drop unused allowlist entries that do not match any blocked targets")
@@ -256,7 +258,7 @@ def main():
                 has_blocked_parent = True
                 used_allows.add(allow_dom)
                 
-                if args.output in ("domain", "hosts") and not args.suppress_comments:
+                if args.output in ("domain", "hosts", "dnsmasq", "unbound", "rpz") and not args.suppress_comments:
                     removed_log.append(f"# {allow_dom} - Allowlisted but blocked by parent domain {parent}")
                 break 
                 
@@ -279,10 +281,20 @@ def main():
         if out_allow:
             out_allow.write("[Adblock Plus]\n")
             out_allow.write(f"! version: {int(time.time())}\n")
+    elif args.output == "rpz":
+        rpz_header = "$TTL 3600\n@ IN SOA localhost. root.localhost. 1 3600 900 2592000 300\n"
+        out_block.write(rpz_header)
+        if out_allow:
+            out_allow.write(rpz_header)
 
     if out_allow:
         for dom in sorted(final_allows, key=domain_sort_key):
-            out_allow.write(f"@@||{dom}^\n" if args.output == "adblock" else f"{dom}\n")
+            if args.output == "adblock":
+                out_allow.write(f"@@||{dom}^\n")
+            elif args.output == "rpz":
+                out_allow.write(f"{dom} CNAME rpz-passthru.\n*.{dom} CNAME rpz-passthru.\n")
+            else:
+                out_allow.write(f"{dom}\n")
     elif args.output == "adblock" and standalone_allows:
         for dom in sorted(standalone_allows, key=domain_sort_key):
             out_block.write(f"@@||{dom}^\n")
@@ -294,10 +306,17 @@ def main():
     for item in sorted(output_items, key=domain_sort_key):
         if item.startswith('#'):
             if args.output == "adblock": out_block.write(f"! {item[2:]}\n")
+            elif args.output == "rpz": out_block.write(f"; {item[2:]}\n")
             else: out_block.write(f"{item}\n")
         else:
             if args.output == "hosts":
                 out_block.write(f"0.0.0.0 {item}\n")
+            elif args.output == "dnsmasq":
+                out_block.write(f"address=/{item}/0.0.0.0\n")
+            elif args.output == "unbound":
+                out_block.write(f"local-zone: \"{item}\" always_nxdomain\n")
+            elif args.output == "rpz":
+                out_block.write(f"{item} CNAME .\n*.{item} CNAME .\n")
             elif args.output == "adblock":
                 exc = adblock_rules.get(item, [])
                 out_block.write(f"||{item}^$denyallow={'|'.join(sorted(exc))}\n" if exc else f"||{item}^\n")

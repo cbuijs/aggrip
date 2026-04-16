@@ -2,19 +2,16 @@
 '''
 ==========================================================================
  Filename: getdom2.py
- Version: 0.13
- Date: 2026-04-16 09:45 CEST
+ Version: 0.16
+ Date: 2026-04-16 15:00 CEST
  Description: Fast, memory-heavy variant of getdom.py. Greps DNS domains 
               using bulk memory ingestion and customizable output formats.
               Supports Plain, Adblock, HOSTS, and URL extraction.
  
  Changes/Fixes:
- - v0.13 (2026-04-16): Added -o/--output parameter (plain, adblock, hosts).
- - v0.12 (2026-04-16): Enhanced URL parsing to strip ports and strictly 
-                       enforce a plain domain list output format.
- - v0.11 (2026-04-16): Added $denyallow modifier routing, and explicitly 
-                       handled multiple domains per line in HOSTS syntax.
- - v0.10 (2026-04-16): Initial getdom2.py implementation.
+ - v0.16 (2026-04-16): Added $TTL and fake SOA record to RPZ header.
+ - v0.15 (2026-04-16): Updated RPZ output to include wildcard subdomains.
+ - v0.14 (2026-04-16): Added dnsmasq, unbound, and rpz output formats.
 ==========================================================================
 '''
 
@@ -44,7 +41,7 @@ def main():
     parser = argparse.ArgumentParser(description="Grep DNS domains from text inputs (Fast Variant).")
     parser.add_argument("-l", "--less-strict", action="store_true", help="Allow underscores (_) and asterisks (*) in domain names")
     parser.add_argument("-a", "--allow", action="store_true", help="Grep only 'allowed' domains (rules starting with @@ or $denyallow exceptions)")
-    parser.add_argument("-o", "--output", choices=["plain", "adblock", "hosts"], default="plain", help="Output format: 'plain' (default), 'adblock', or 'hosts'")
+    parser.add_argument("-o", "--output", choices=["plain", "adblock", "hosts", "dnsmasq", "unbound", "rpz"], default="plain", help="Output format")
     args = parser.parse_args()
     
     active_pattern = LESS_STRICT_PATTERN if args.less_strict else STRICT_PATTERN
@@ -62,6 +59,9 @@ def main():
     out_buffer = []
     out_add = out_buffer.append
     
+    if args.output == "rpz":
+        out_add("$TTL 3600\n@ IN SOA localhost. root.localhost. 1 3600 900 2592000 300")
+
     for line in raw_lines:
         line = line.split('#')[0].strip()
         
@@ -119,11 +119,19 @@ def main():
                 if active_pattern.match(cand) and not is_fast_ip(cand):
                     if args.output == "hosts":
                         out_add(f"0.0.0.0 {cand}")
-                    elif args.output == "adblock":
+                    elif args.output == "dnsmasq":
+                        out_add(f"server=/{cand}/#" if args.allow else f"address=/{cand}/0.0.0.0")
+                    elif args.output == "unbound":
+                        out_add(f"local-zone: \"{cand}\" transparent" if args.allow else f"local-zone: \"{cand}\" always_nxdomain")
+                    elif args.output == "rpz":
                         if args.allow:
-                            out_add(f"@@||{cand}^")
+                            out_add(f"{cand} CNAME rpz-passthru.")
+                            out_add(f"*.{cand} CNAME rpz-passthru.")
                         else:
-                            out_add(f"||{cand}^")
+                            out_add(f"{cand} CNAME .")
+                            out_add(f"*.{cand} CNAME .")
+                    elif args.output == "adblock":
+                        out_add(f"@@||{cand}^" if args.allow else f"||{cand}^")
                     else:
                         out_add(cand)
                 
