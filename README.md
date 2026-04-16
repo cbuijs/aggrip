@@ -30,10 +30,10 @@ A collection of highly optimized Python 3 command-line utilities for processing,
   *Note: Faster execution but requires more memory.*
 
 * **`ipsort.py`**
-  Reads STDIN, identifies logical document sections based on non-IP text (such as comments, headers, or blank lines), and performs a strict IP-aware sort (IPv4 first, then IPv6) *within* those sections. Perfectly preserves the original document layout and section comments. Optionally supports CIDR aggregation within the preserved sections using the `-a` / `--aggregate` flag.
+  Reads STDIN, identifies logical document sections based on non-IP text (such as comments, headers, or blank lines), and performs a strict IP-aware sort (IPv4 first, then IPv6) *within* those sections. Perfectly preserves the original document layout and section comments. Optionally supports CIDR aggregation within the preserved sections using the `-a` / `--aggregate` flag, and descending sorting using the `-r` / `--reverse` flag.
 
 * **`ipsort2.py`**
-  Performs the exact same segmented layout-preserving IP sort and optional aggregation (`-a` / `--aggregate`) as `ipsort.py`, but utilizes high-speed bulk memory reads, heuristic text skipping, and segmented array sorting. 
+  Performs the exact same segmented layout-preserving IP sort, optional aggregation (`-a` / `--aggregate`), and reverse sorting (`-r` / `--reverse`) as `ipsort.py`, but utilizes high-speed bulk memory reads, heuristic text skipping, and segmented array sorting. 
   *Note: Faster execution but requires more memory.*
 
 * **`range2cidr.py`**
@@ -72,24 +72,17 @@ A collection of highly optimized Python 3 command-line utilities for processing,
   *Note: Significantly faster execution for massive blocklists, but consumes more RAM. Identical command-line arguments.*
 
 * **`domsort.py`**
-  Reads STDIN, identifies logical document sections based on non-domain text (such as comments or blank lines), and strictly validates and sorts domains from the root level down (tree-wise/TLD-first) *within* those sections. Perfectly preserves the original document layout. Supports a `-l` / `--less-strict` flag to permit underscores (`_`) and asterisks (`*`) in domains (e.g., wildcards or SRV records) without disrupting the alphabetical sort order.
+  Reads STDIN, identifies logical document sections based on non-domain text (such as comments or blank lines), and strictly validates and sorts domains from the root level down (tree-wise/TLD-first) *within* those sections. Perfectly preserves the original document layout. Supports a `-l` / `--less-strict` flag to permit underscores (`_`) and asterisks (`*`) in domains (e.g., wildcards or SRV records) without disrupting the alphabetical sort order. Additionally supports standard A-Z sorting via the `-a` / `--alphabetical` flag and descending sort order via the `-r` / `--reverse` flag.
 
 * **`domsort2.py`**
-  Performs the exact same segmented layout-preserving domain sort and optional less-strict validation (`-l` / `--less-strict`) as `domsort.py`, but utilizes high-speed bulk memory reads, fast-path text skipping, and segmented array sorting. 
+  Performs the exact same segmented layout-preserving domain sort and optional parameter support (`-l` / `--less-strict`, `-a` / `--alphabetical`, `-r` / `--reverse`) as `domsort.py`, but utilizes high-speed bulk memory reads, fast-path text skipping, and segmented array sorting. 
   *Note: Faster execution but requires more memory.*
 
 * **`undup.py`**
-  Deduplicates a DNS domain list by removing unnecessary subdomains if the parent domain already exists in the list (e.g., removes `sub.example.com` if `example.com` is present).
+  Deduplicates a DNS domain list by removing unnecessary subdomains if the parent domain already exists in the list (e.g., removes `sub.example.com` if `example.com` is present). Supports a `-l` / `--less-strict` flag to allow underscores (`_`) and asterisks (`*`) when deduplicating wildcards and SRV records.
 
 * **`undup2.py`**
-  Performs the same function as `undup.py` but reads data in raw binary/byte blocks. 
-  *Note: Faster execution but requires more memory.*
-
-* **`domsort.py`**
-  Reads STDIN, identifies logical document sections based on non-domain text (such as comments or blank lines), and strictly validates and sorts domains from the root level down (tree-wise/TLD-first) *within* those sections. Perfectly preserves the original document layout. Supports a `-l` / `--less-strict` flag to permit underscores (`_`) and asterisks (`*`) in domains (e.g., wildcards or SRV records) without disrupting the alphabetical sort order.
-
-* **`domsort2.py`**
-  Performs the exact same segmented layout-preserving domain sort and optional less-strict validation (`-l` / `--less-strict`) as `domsort.py`, but utilizes high-speed bulk memory reads, fast-path text skipping, and segmented array sorting. 
+  Performs the same deduplication and optional less-strict validation (`-l` / `--less-strict`) as `undup.py`, but reads and filters data in raw binary/byte blocks. 
   *Note: Faster execution but requires more memory.*
 
 ---
@@ -98,14 +91,16 @@ A collection of highly optimized Python 3 command-line utilities for processing,
 
 With the exception of `clean-dom.py`, these tools do NOT need mandatory command-line file parameters. They are designed to be chained together using standard input (`STDIN`) and standard output (`STDOUT`) based on common/best practices.
 
+**You can fire up any of the scripts with `-h` or `--help` to get detailed information on available command-line parameters.**
+
 ### Pipeline Examples:
 
     cat raw_ips.txt | ./aggrip.py > optimized_cidrs.txt
     cat ranges.txt | ./range2cidr.py | ./aggrip.py
-    cat domains.txt | ./undup.py | ./domsort.py > clean_domains.txt
-    cat mixed_ips_and_comments.txt | ./ipsort.py > nicely_sorted_sections.txt
+    cat domains.txt | ./undup.py -l | ./domsort.py > clean_domains.txt
+    cat mixed_ips_and_comments.txt | ./ipsort.py -r > nicely_sorted_sections.txt
     cat messy_sections.txt | ./ipsort2.py -a > aggregated_sections.txt
-    cat wildcard_zones.txt | ./domsort2.py -l > clean_zones.txt
+    cat wildcard_zones.txt | ./domsort2.py -l -a -r > clean_zones.txt
 
 ### For `clean-dom.py`:
 

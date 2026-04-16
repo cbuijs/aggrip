@@ -2,13 +2,14 @@
 '''
 ==========================================================================
  Filename: ipsort2.py
- Version: 0.11
- Date: 2026-04-15 19:08 CEST
+ Version: 0.12
+ Date: 2026-04-16 08:22 CEST
  Description: Fast, memory-heavy variant of ipsort.py. Performs bulk memory 
               reads, heuristic text skipping, and segmented array sorting.
-              Supports optional CIDR aggregation within sections.
+              Supports optional CIDR aggregation within sections and reverse sorting.
  
  Changes/Fixes:
+ - v0.12 (2026-04-16): Added -r/--reverse parameter for reverse IP sorting.
  - v0.11 (2026-04-15): Added -a/--aggregate toggle.
  - v0.10 (2026-04-15): Initial ipsort2.py - Segmented IP/CIDR sorting (Fast).
 ==========================================================================
@@ -28,9 +29,11 @@ def is_fast_ip(token):
 def main():
     parser = argparse.ArgumentParser(description="Segmented layout-preserving IP/CIDR sort (Fast Variant).")
     parser.add_argument("-a", "--aggregate", action="store_true", help="Aggregate/merge CIDRs within their respective sections")
+    parser.add_argument("-r", "--reverse", action="store_true", help="Sort IP/CIDRs in reverse order")
     args = parser.parse_args()
 
     try:
+        # Load everything into memory for high-speed segment processing
         raw_lines = sys.stdin.read().splitlines()
     except KeyboardInterrupt:
         sys.exit(0)
@@ -42,6 +45,30 @@ def main():
     out_add = out_buffer.append
     current_block = []
     
+    def process_current_block():
+        """Helper to sort/aggregate and flush the current block of IP items."""
+        if not current_block:
+            return
+        if args.aggregate:
+            v4_nets = [item[1] for item in current_block if item[0] == 4]
+            v6_nets = [item[1] for item in current_block if item[0] == 6]
+            if v4_nets:
+                collapsed = list(ipaddress.collapse_addresses(v4_nets))
+                if args.reverse:
+                    collapsed.reverse()
+                out_buffer.extend(str(net) for net in collapsed)
+            if v6_nets:
+                collapsed = list(ipaddress.collapse_addresses(v6_nets))
+                if args.reverse:
+                    collapsed.reverse()
+                out_buffer.extend(str(net) for net in collapsed)
+        else:
+            # Sort logic supporting reverse
+            current_block.sort(key=lambda x: (x[0], x[1]), reverse=args.reverse)
+            for item in current_block:
+                out_add(item[2])
+        current_block.clear()
+
     for line in raw_lines:
         stripped = line.strip()
         parts = stripped.split()
@@ -58,36 +85,13 @@ def main():
                 pass
 
         if not is_ip_line:
-            if current_block:
-                if args.aggregate:
-                    v4_nets = [item[1] for item in current_block if item[0] == 4]
-                    v6_nets = [item[1] for item in current_block if item[0] == 6]
-                    if v4_nets:
-                        out_buffer.extend(str(net) for net in ipaddress.collapse_addresses(v4_nets))
-                    if v6_nets:
-                        out_buffer.extend(str(net) for net in ipaddress.collapse_addresses(v6_nets))
-                else:
-                    current_block.sort(key=lambda x: (x[0], x[1]))
-                    for item in current_block:
-                        out_add(item[2])
-                current_block.clear()
-                
+            process_current_block()
             out_add(line)
 
     # Process dangling block at EOF
-    if current_block:
-        if args.aggregate:
-            v4_nets = [item[1] for item in current_block if item[0] == 4]
-            v6_nets = [item[1] for item in current_block if item[0] == 6]
-            if v4_nets:
-                out_buffer.extend(str(net) for net in ipaddress.collapse_addresses(v4_nets))
-            if v6_nets:
-                out_buffer.extend(str(net) for net in ipaddress.collapse_addresses(v6_nets))
-        else:
-            current_block.sort(key=lambda x: (x[0], x[1]))
-            for item in current_block:
-                out_add(item[2])
+    process_current_block()
 
+    # Bulk flush
     if out_buffer:
         sys.stdout.write('\n'.join(out_buffer) + '\n')
 
