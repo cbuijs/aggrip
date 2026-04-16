@@ -6,6 +6,19 @@ A collection of highly optimized Python 3 command-line utilities for processing,
 
 ## Tool Overview
 
+### Categorization & Analysis Tools
+
+* **`categorize.py`**
+  Categorizes a mixed input stream of IPs, CIDRs, and Domains into highly specific logical sections. 
+  * **IPs/CIDRs:** Supports advanced RFC definitions (e.g., Carrier-Grade NAT, Multicast, Link-Local, Class E), Special-Use IP addresses, and standard BOGON mapping. Natively decodes reverse-DNS (`.arpa`) pointers back into their true IP representations for accurate routing.
+  * **Domains:** Supports exact Special-Use Domain RFCs, ccTLD country mapping, eTLD heuristics, Web3/crypto domains, and WPAD detection.
+  * **Heuristics:** Features fast-path regex detection for Ad and Tracker subdomains based on first-label analysis.
+  * **Formatting:** Strictly discards invalid garbage text. By default, outputs beautifully grouped and alphabetically/IP-sorted document sections. Supports an `-i` / `--inline` flag to flatten the output and append the specific RFC/Category designation as an inline comment instead.
+
+* **`categorize2.py`**
+  Performs the exact same deep categorization, RFC mapping, and heuristic scanning as `categorize.py`, but utilizes high-speed bulk memory reads, fast-path text skipping, and unified output buffering to maximize throughput on massive datasets. 
+  *Note: Significantly faster execution but requires more memory.*
+
 ### IP Address & CIDR Tools
 
 * **`aggrip.py`**
@@ -65,7 +78,7 @@ A collection of highly optimized Python 3 command-line utilities for processing,
   * Outputs dynamically to Plain Domain, HOSTS, or standard Adblock format.
   * Supports writing directly to dedicated blocklist and allowlist files.
   
-  *(Note: This is the only tool that takes mandatory standard command-line arguments instead of just processing input from STDIN. It supports passing multiple files per argument. See [clean-dom-manual.md](https://github.com/cbuijs/aggrip/blob/master/clean-dom-manual.md) for advanced usage).*
+  *(Note: This is the only tool that takes mandatory standard command-line arguments instead of just processing input from STDIN. It supports passing multiple files per argument. See `clean-dom-manual.md` for advanced usage).*
 
 * **`clean-dom2.py`**
   Performs the exact same DNS optimization, routing, and deduplication as `clean-dom.py`, but utilizes high-speed bulk memory reads and a reverse-string `O(N log N)` sorting algorithm.
@@ -98,7 +111,6 @@ A collection of highly optimized Python 3 command-line utilities for processing,
 
 With the exception of `clean-dom.py`, these tools do NOT need mandatory command-line file parameters. They are designed to be chained together using standard input (`STDIN`) and standard output (`STDOUT`) based on common/best practices.
 
-
 **NOTE:** You can fire up any of the scripts with `-h` or `--help` to get detailed information on available command-line parameters.
 
 ### Pipeline Examples:
@@ -110,6 +122,7 @@ With the exception of `clean-dom.py`, these tools do NOT need mandatory command-
     cat mixed_ips_and_comments.txt | ./ipsort.py -r > nicely_sorted_sections.txt
     cat messy_sections.txt | ./ipsort2.py -a > aggregated_sections.txt
     cat wildcard_zones.txt | ./domsort2.py -l -a -r > clean_zones.txt
+    cat messy_dump_of_everything.log | ./categorize2.py -i > flagged_inventory.txt
 
 ### For `clean-dom.py`:
 
