@@ -10,7 +10,7 @@ I spent years as a networking and security consultant, eating "data" and "migrat
 
 To keep my sanity intact with all the weird edge-cases I found at work, I built these scripts to support my home-lab (and let's be honest, they still save my ass at work too). The result is this highly optimized toolkit to grep, categorize, aggregate, and sort IPs, CIDRs, and domains. 
 
-Just `cat` some messy data through it, chain them in your Unix pipelines, and have fun playing around. And remember... it is *always* DNS!
+Just `cat` some messy data through it, chain them in your Unix pipelines, and have fun playing around. And remember... it is *always* DNS! (and anything TCP/IP of course).
 
 ---
 
