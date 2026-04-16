@@ -78,6 +78,13 @@ A collection of highly optimized Python 3 command-line utilities for processing,
   Performs the exact same segmented layout-preserving domain sort and optional parameter support (`-l` / `--less-strict`, `-a` / `--alphabetical`, `-r` / `--reverse`) as `domsort.py`, but utilizes high-speed bulk memory reads, fast-path text skipping, and segmented array sorting. 
   *Note: Faster execution but requires more memory.*
 
+* **`getdom.py`**
+  A powerful extraction tool that acts as a domain-aware `grep`. It reads text from standard input (plain lists, HOSTS formats, Adblock feeds, or URLs) and extracts valid DNS domains while discarding garbage text, IP addresses, and comments. Supports a `-a` / `--allow` flag to exclusively extract "allowlisted" domains (e.g., rules starting with `@@` or isolated exceptions within `$denyallow` modifiers). Also supports a `-l` / `--less-strict` flag to permit underscores (`_`) and asterisks (`*`) for extracting wildcards or SRV records. Using the `-o` / `--output` parameter, the extracted domains can be formatted on the fly as `plain` (default), `adblock` (dynamically outputs `||domain^` or `@@||domain^` based on the `-a` flag), or `hosts` (prepends `0.0.0.0`). 
+
+* **`getdom2.py`**
+  Performs the exact same domain extraction, syntax routing, and customizable output formatting (`-o`) as `getdom.py`, but utilizes high-speed bulk memory ingestion and unified output buffering to dramatically speed up scanning across large datasets.
+  *Note: Faster execution but requires more memory.*
+
 * **`undup.py`**
   Deduplicates a DNS domain list by removing unnecessary subdomains if the parent domain already exists in the list (e.g., removes `sub.example.com` if `example.com` is present). Supports a `-l` / `--less-strict` flag to allow underscores (`_`) and asterisks (`*`) when deduplicating wildcards and SRV records.
 
@@ -98,7 +105,8 @@ With the exception of `clean-dom.py`, these tools do NOT need mandatory command-
 
     cat raw_ips.txt | ./aggrip.py > optimized_cidrs.txt
     cat ranges.txt | ./range2cidr.py | ./aggrip.py
-    cat domains.txt | ./undup.py -l | ./domsort.py > clean_domains.txt
+    cat mixed_sources.txt | ./getdom2.py -l | ./undup2.py -l | ./domsort2.py > clean_domains.txt
+    cat messy_adblock.txt | ./getdom2.py -a -o adblock > clean_allowlist.txt
     cat mixed_ips_and_comments.txt | ./ipsort.py -r > nicely_sorted_sections.txt
     cat messy_sections.txt | ./ipsort2.py -a > aggregated_sections.txt
     cat wildcard_zones.txt | ./domsort2.py -l -a -r > clean_zones.txt
