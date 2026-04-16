@@ -4,6 +4,16 @@ A collection of highly optimized Python 3 command-line utilities for processing,
 
 ---
 
+## INTRO
+
+I spent years as a networking and security consultant, eating "data" and "migrations" for breakfast. Funny enough, that madness bled right into my personal life as "hobby". Being a proper Dutch nerd, tinkering with "DNS" is genuinely what I do on a lazy Sunday afternoon... yes, really!
+
+To keep my sanity intact with all the weird edge-cases I found at work, I built these scripts to support my home-lab (and let's be honest, they still save my ass at work too). The result is this highly optimized toolkit to grep, categorize, aggregate, and sort IPs, CIDRs, and domains. 
+
+Just `cat` some messy data through it, chain them in your Unix pipelines, and have fun playing around. And remember... it is *always* DNS!
+
+---
+
 ## Tool Overview
 
 ### Categorization & Analysis Tools
