@@ -76,22 +76,23 @@ Just `cat` some messy data through it, chain them in your Unix pipelines, and ha
 ### DNS Domain Tools
 
 * **`clean-dom.py`**
-  A comprehensive optimization script for DNS blocklists. It cross-references one or more blocklists against optional allowlists and Top-N lists, while simultaneously deduplicating subdomains across all provided files.
+  A comprehensive, enterprise-grade optimization script for DNS blocklists. It cross-references massive blocklists against allowlists and Top-N lists while simultaneously deduplicating subdomains.
   
   **Advanced parsing and routing features:**
-  * Accepts both local file paths and remote URLs (`http://` or `https://`).
-  * Supports standard plain domain lists, HOSTS file syntax, and Adblock syntax.
+  * Accepts local file paths and remote URLs (`http://` or `https://`).
+  * Supports standard domain lists, HOSTS, and Adblock syntax simultaneously (or rigidly enforce syntax via the `-i` / `--input` flag).
+  * Automatically drops IPs, CIDRs, URL paths, Adblock regex rules (`/regex/`), and protects against truncating element hiding rules (`##`).
   * Dynamically routes inline Adblock allowlist rules (`@@||domain.com^`) found inside blocklist files directly to the allowlist.
-  * Fully parses and enforces Adblock `$denyallow` modifiers as strict exceptions to both block and allowlist rules.
-  * Automatically normalizes inputs by lowercasing, trimming leading/trailing dots, and removing prefix wildcards (`*.domain.com` -> `domain.com`).
-  * Optionally drops unused allowlist entries (`--optimize-allowlist`) to ensure exported allowlists are strictly utilized. 
-  * Outputs dynamically to Plain Domain, HOSTS, or standard Adblock format.
-  * Supports writing directly to dedicated blocklist and allowlist files.
+  * Strictly parses Adblock modifiers, enforcing `$denyallow` while rejecting non-DNS modifiers (like `$ping`).
+  * Optionally drops unused allowlist entries (`--optimize-allowlist`) to keep exported exception lists strictly utilized. 
+  * Customizable output formatting (`-o` / `--output`) including Plain, HOSTS, Adblock, DNSMasq, Unbound, and RPZ.
+  * Save original downloaded feeds via the `-w` / `--work` parameter and sort outputs via the `--sort` parameter (`domain`, `alphabetically`, `tld`).
+  * Suppresses output file creation if the resulting payload is empty.
   
-  *(Note: This is the only tool that takes mandatory standard command-line arguments instead of just processing input from STDIN. It supports passing multiple files per argument. See [clean-dom-manual.md](https://github.com/cbuijs/aggrip/blob/master/clean-dom-manual.md) for advanced usage).*
+  *(Note: This is the only tool that takes mandatory command-line arguments instead of just processing input from STDIN. See [clean-dom-manual.md](https://github.com/cbuijs/aggrip/blob/master/clean-dom-manual.md) for advanced usage).*
 
 * **`clean-dom2.py`**
-  Performs the exact same DNS optimization, routing, and deduplication as `clean-dom.py`, but utilizes high-speed bulk memory reads and a reverse-string `O(N log N)` sorting algorithm.
+  Performs the exact same DNS optimization, routing, formatting, and deduplication as `clean-dom.py`, but utilizes high-speed bulk memory reads and a reverse-string `O(N log N)` sorting algorithm.
   *Note: Significantly faster execution for massive blocklists, but consumes more RAM. Identical command-line arguments.*
 
 * **`domsort.py`**
@@ -137,10 +138,13 @@ With the exception of `clean-dom.py`, these tools do NOT need mandatory command-
 
 ### For `clean-dom.py`:
 
-    ./clean-dom.py --blocklist bl1.txt https://example.com/bl2.txt \
+    ./clean-dom.py --blocklist bl1.txt [https://example.com/bl2.txt](https://example.com/bl2.txt) \
                    [--allowlist al1.txt] \
                    [--topnlist top1.txt] \
-                   [-o {domain,hosts,adblock}] \
+                   [-i {domain,hosts,adblock}] \
+                   [-o {domain,hosts,adblock,dnsmasq,unbound,rpz}] \
+                   [--sort {domain,alphabetically,tld}] \
+                   [-w /path/to/workdir] \
                    [--out-blocklist out_bl.txt] \
                    [--out-allowlist out_al.txt] \
                    [--optimize-allowlist] \

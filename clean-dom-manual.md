@@ -12,16 +12,17 @@
 
 ## Core Features
 
-* **Multi-Format Ingestion:** Seamlessly reads Plain Domain lists, standard HOSTS formats, and Adblock DNS syntaxes simultaneously.
+* **Multi-Format Ingestion:** Seamlessly reads Plain Domain lists, standard HOSTS formats, and Adblock DNS syntaxes simultaneously. Can be strictly locked to a single format using `--input`.
+* **Strict Validation:** Automatically drops IPs, CIDR networks, URL paths, and invalid TLDs. Safely ignores Adblock Regex rules (`/regex/`) and explicitly protects Adblock element hiding rules (`##`, `#@#`) from being falsely interpreted as domains.
 * **Dynamic Adblock Routing:** Automatically detects Adblock allowlist rules (`@@||`) inside blocklist feeds and routes them dynamically.
-* **Strict Exception Handling:** Fully supports the Adblock `$denyallow` modifier, ensuring specific subdomains remain blocked or allowed regardless of their parent domain's status.
+* **Strict Exception Handling:** Fully supports the Adblock `$denyallow` modifier, ensuring specific subdomains remain blocked or allowed regardless of their parent domain's status. Drops rules containing non-DNS modifiers (like `$ping` or `$third-party`).
 * **Tree-Based Deduplication:** Sorts domains by depth (TLD -> Subdomain) to guarantee that if a parent domain is blocked, all redundant subdomains are stripped out to save memory.
 * **Allowlist Optimization:** Optionally strips out allowlisted domains that do not actively match or neutralize any targeted blocklist items, keeping exported exception lists perfectly lean.
-* **Multiple Output Formats:** Export the final, optimized list as plain domains, a valid HOSTS file, or a standard Adblock configuration file.
-* **Direct File Exporting:** Natively write the final blocklist and the parsed allowlist into dedicated files, completely bypassing the need for shell redirects (`>`).
+* **Multiple Output Formats & Sorting:** Export the final list as domains, HOSTS, Adblock, DNSMasq, Unbound, or RPZ. Sort the output tree-wise (TLD-down), naturally alphabetically, or grouped by TLD.
+* **Smart File Generation:** Outputs directly to dedicated files. Suppresses output file creation automatically if the final compiled payload is empty.
 
 ### Performance Note: `clean-dom2.py`
-For enterprise-scale blocklists, a memory-optimized alternative (`clean-dom2.py`) is included. It utilizes bulk memory reads and an `O(N log N)` reverse-string sort to instantly process Top-N filtering, Allowlist cross-referencing, and Deduplication in a single pass. Both scripts are functionally identical and share the exact same command-line syntax; use `clean-dom2.py` when speed is critical and RAM overhead is not a concern.
+For enterprise-scale blocklists, a memory-optimized alternative (`clean-dom2.py`) is included. It utilizes bulk memory reads and an `O(N log N)` reverse-string sort to instantly process Top-N filtering, Allowlist cross-referencing, and Deduplication in a single pass. Both scripts are functionally identical and share the exact same command-line syntax.
 
 ---
 
@@ -32,7 +33,10 @@ For enterprise-scale blocklists, a memory-optimized alternative (`clean-dom2.py`
 | `--blocklist` | **Required** | One or more paths (or URLs) to DNS blocklists. |
 | `--allowlist` | Optional | One or more paths (or URLs) to DNS allowlists. |
 | `--topnlist` | Optional | One or more paths (or URLs) to Top-N domain lists. If provided, *only* domains present in this list will be kept. |
-| `-o`, `--output` | Optional | Output format. Choices: `domain` (default), `hosts`, `adblock`. |
+| `-i`, `--input` | Optional | Strictly enforce an input format (`domain`, `hosts`, `adblock`). Lines not matching this syntax are skipped. |
+| `-o`, `--output` | Optional | Output format. Choices: `domain` (default), `hosts`, `adblock`, `dnsmasq`, `unbound`, `rpz`. |
+| `--sort` | Optional | Sorting algorithm. Choices: `domain` (default, TLD-down), `alphabetically` (natural A-Z), `tld` (grouped by TLD). |
+| `-w`, `--work`| Optional | Directory path to save unmodified raw source files. Stored as `[SHA256].raw` with metadata headers. |
 | `--out-blocklist` | Optional | File path to write the final blocklist to. If omitted, prints to STDOUT. |
 | `--out-allowlist` | Optional | File path to write the parsed allowlist to. |
 | `--optimize-allowlist` | Optional | Drops unused allowlist entries that do not match or neutralize any actively blocked targets. |
@@ -43,16 +47,18 @@ For enterprise-scale blocklists, a memory-optimized alternative (`clean-dom2.py`
 
 ## Understanding the Logic
 
-### Normalization
-When domains are ingested, `clean-dom.py` strips unnecessary garbage:
+### Normalization & Validation
+When domains are ingested, `clean-dom.py` cleans and verifies the input:
 * **Wildcards:** `*.example.com` becomes `example.com`
 * **Dots:** Removes leading/trailing dots.
-* **Syntax:** Adblock syntaxes (`||` and `^`) are stripped. HOSTS entries (`0.0.0.0 domain.com`) are reduced to just the domain.
+* **Syntax Checks:** Adblock syntaxes (`||` and `^`) are stripped. HOSTS entries (`0.0.0.0 domain.com`) are reduced to just the domain.
+* **Rejection:** It immediately discards any parsed token that evaluates as a valid IPv4/IPv6 address, a CIDR block, an Adblock Regex (`/regex/`), or a URL containing slashes.
 
-### Dynamic Routing & `$denyallow`
+### Dynamic Routing & Adblock Modifiers
 Because many maintained blocklists include inline exceptions, `clean-dom.py` parses these dynamically:
 1. If `--blocklist list.txt` contains `@@||example.com^`, the script will automatically send `example.com` to the Allowlist.
 2. If the tool encounters `||example.com^$denyallow=sub.example.com`, it will block `example.com` but generate a strict **Override** allowing `sub.example.com`. 
+3. **Strict Modifiers:** If a rule contains a modifier that has nothing to do with DNS resolution (e.g., `||example.com^$ping,third-party`), the entire rule is discarded to prevent blocking infrastructure based on browser-specific tracking functions.
 
 ### The Deduplication Phase
 To ensure efficiency, all rules are evaluated from the top-down:
@@ -70,13 +76,26 @@ Read two local blocklists, apply an allowlist, and print the deduplicated plain 
 ```bash
 ./clean-dom.py --blocklist ads.txt tracking.txt --allowlist whitelist.txt
 ```
-### 2. Strict Exporting with Allowlist Optimization
-Ingest URLs and local lists, dynamically drop any unused exceptions from the allowlist, and output both block and allow targets to their own files.
 
+### 2. Strict Exporting with Allowlist Optimization
+Ingest URLs and local lists, explicitly enforce they are parsed as `adblock` format, drop unused exceptions from the allowlist, and output both targets to their own files sorted naturally.
 ```bash
 ./clean-dom.py --blocklist ads.txt https://example.com/malware.txt \
                --allowlist whitelist.txt \
+               --input adblock \
+               --sort alphabetically \
                --optimize-allowlist \
                --out-blocklist final_blocks.txt \
                --out-allowlist final_allows.txt
 ```
+
+### 3. Caching Raw Files and Outputting RPZ
+Download a large Top-N list and blocklist, save the original unparsed feeds to a `/tmp/raw` directory for auditing, and export the deduplicated results as a BIND RPZ zone file.
+```bash
+./clean-dom.py --blocklist https://example.com/huge-blocklist.txt \
+               --topnlist https://example.com/top-1m.csv \
+               --work /tmp/raw \
+               --output rpz \
+               --out-blocklist zone.rpz
+```
+

@@ -2,25 +2,30 @@
 '''
 ==========================================================================
  Filename: clean-dom2.py
- Version: 0.30
- Date: 2026-04-22 09:55 CEST
+ Version: 0.36
+ Date: 2026-04-22 10:50 CEST
  Description: Enterprise-grade DNS blocklist optimizer. Ingests massive 
               blocklists, applying cross-references, modifiers ($denyallow), 
               optionally optimizes allowlists, and deduplicates via reverse sort.
  
  Changes/Fixes:
+ - v0.36 (2026-04-22): Added --sort parameter for domain, alphabetically (natural), and tld sort.
+ - v0.35 (2026-04-22): Suppressed creation of empty output files (or files containing only comments).
+ - v0.34 (2026-04-22): Strictly rejected Adblock rules with non-DNS modifiers (e.g., $ping).
+ - v0.33 (2026-04-22): Fixed false-positives caused by truncating Adblock element hiding rules (##, #@#).
+ - v0.32 (2026-04-22): Added -w/--work parameter to save unmodified raw source files.
+ - v0.31 (2026-04-22): Added explicit filtering to drop any IPs or CIDR blocks.
  - v0.30 (2026-04-22): Explicitly ignored Adblock/AdGuard regex rules (/regex/).
  - v0.29 (2026-04-22): Added -i/--input parameter to strictly enforce input formats.
  - v0.28 (2026-04-22): Added strict regex validation to drop invalid paths/URLs.
-                       Ignored rules with unsupported modifiers (e.g., $ping).
  - v0.27 (2026-04-16): Added $TTL and fake SOA record to RPZ header.
- - v0.26 (2026-04-16): Updated RPZ output to include wildcard subdomains.
- - v0.25 (2026-04-16): Added dnsmasq, unbound, and rpz output formats.
 ==========================================================================
 '''
 
 import argparse
 import sys
+import os
+import hashlib
 import ipaddress
 import urllib.request
 import time
@@ -36,14 +41,14 @@ def log_msg(msg, is_verbose):
     if is_verbose:
         sys.stderr.write(f"[*] {msg}\n")
 
-def is_valid_ip(token):
-    """Fast-path heuristic check for IP addresses to prevent slow exception handling."""
+def is_ip_or_cidr(token):
+    """Fast-path heuristic check for IPs/CIDRs to prevent slow exception handling."""
     if not token:
         return False
     c = token[0]
     if c.isdigit() or c == ':':
         try:
-            ipaddress.ip_address(token)
+            ipaddress.ip_network(token, strict=False)
             return True
         except ValueError:
             pass
@@ -85,7 +90,7 @@ def parse_domain_token(token):
             if mod.startswith('denyallow='):
                 for d in mod[10:].split('|'):
                     clean_da = normalize_domain(d)
-                    if clean_da and DOMAIN_PATTERN.match(clean_da):
+                    if clean_da and DOMAIN_PATTERN.match(clean_da) and not is_ip_or_cidr(clean_da):
                         denyallow_domains.append(clean_da)
             elif mod:
                 # Unsupported meta-option (e.g. $ping), discard the entire rule safely
@@ -100,8 +105,8 @@ def parse_domain_token(token):
         
     clean_dom = normalize_domain(domain_part)
     
-    # Strictly enforce valid domain syntax, dropping pure URL/Path rules (e.g., domain.com/path/*)
-    if clean_dom and not DOMAIN_PATTERN.match(clean_dom):
+    # Strictly enforce valid domain syntax, dropping pure URL/Path rules and IP/CIDRs
+    if clean_dom and (not DOMAIN_PATTERN.match(clean_dom) or is_ip_or_cidr(clean_dom)):
         clean_dom = None
         
     return {
@@ -121,7 +126,7 @@ def get_lines_bulk(source):
         with open(source, 'r', encoding='utf-8', errors='ignore') as f:
             return f.read().splitlines()
 
-def read_domains_bulk(source, is_topn=False, force_allow=False, is_verbose=False, input_format=None):
+def read_domains_bulk(source, is_topn=False, force_allow=False, is_verbose=False, input_format=None, work_dir=None, list_type="Unknown"):
     """Parses lists and automatically routes domains (blocks, allows, exceptions)."""
     block_domains = []
     allow_domains = []
@@ -141,9 +146,32 @@ def read_domains_bulk(source, is_topn=False, force_allow=False, is_verbose=False
             else:
                 allow_domains.extend(parsed['denyallow'])
 
-    for line in get_lines_bulk(source):
-        line = line.split('#')[0].strip()
-        if not line or line.startswith('!'): continue
+    lines = get_lines_bulk(source)
+
+    if work_dir:
+        source_hash = hashlib.sha256(source.encode('utf-8')).hexdigest()[:16]
+        raw_path = os.path.join(work_dir, f"{source_hash}.raw")
+        with open(raw_path, 'w', encoding='utf-8') as raw_file:
+            raw_file.write(f"# Type: {list_type} | Source: {source}\n")
+            raw_file.write('\n'.join(lines) + '\n')
+
+    for raw_line in lines:
+        raw_line = raw_line.strip()
+        if not raw_line or raw_line.startswith('!'): continue
+        
+        # If a '#' appears before any space, it's an Adblock element hiding rule (domain.com##...)
+        # snippet/injection (domain.com#%#), URL anchor, or full line comment. Skip it to prevent
+        # truncating it into a false-positive domain.
+        first_hash = raw_line.find('#')
+        if first_hash != -1:
+            if first_hash == 0:
+                continue
+            first_space = raw_line.find(' ')
+            if first_space == -1 or first_hash < first_space:
+                continue
+                
+        line = raw_line.split('#')[0].strip()
+        if not line: continue
         
         if is_topn and ',' in line:
             if input_format and input_format != "domain":
@@ -151,7 +179,7 @@ def read_domains_bulk(source, is_topn=False, force_allow=False, is_verbose=False
             parts = line.split(',', 1)
             if len(parts) > 1:
                 dom = normalize_domain(parts[1])
-                if dom and DOMAIN_PATTERN.match(dom): 
+                if dom and DOMAIN_PATTERN.match(dom) and not is_ip_or_cidr(dom): 
                     block_domains.append(dom)
             continue
         
@@ -161,7 +189,7 @@ def read_domains_bulk(source, is_topn=False, force_allow=False, is_verbose=False
         first_token = parts[0]
         
         # Determine the line syntax heuristic for strict format checking
-        is_hosts = is_valid_ip(first_token)
+        is_hosts = is_ip_or_cidr(first_token)
         is_adblock = not is_hosts and (first_token.startswith('@@') or first_token.startswith('||') or '^' in first_token or '$' in first_token or first_token.startswith('/'))
         is_domain = not is_hosts and not is_adblock
 
@@ -188,13 +216,23 @@ def get_parents(domain):
         yield domain[idx + 1:]
         idx = domain.find('.', idx + 1)
 
-def domain_sort_key(item):
-    """Generates a sorting key for tree-down (TLD to subdomain) formatting output."""
-    if item.startswith('# ') or item.startswith('; '):
-        domain = item[2:].split(' - ', 1)[0]
+def get_sort_key_func(sort_type):
+    """Returns the appropriate sorting lambda based on the selected algorithm."""
+    def extract_domain(item):
+        if item.startswith('# ') or item.startswith('; '):
+            return item[2:].split(' - ', 1)[0]
+        return item
+
+    def natural_keys(text):
+        return [int(c) if c.isdigit() else c for c in re.split(r'(\d+)', text)]
+
+    if sort_type == "alphabetically":
+        return lambda item: natural_keys(extract_domain(item))
+    elif sort_type == "tld":
+        return lambda item: (extract_domain(item).split('.')[-1], natural_keys(extract_domain(item)))
     else:
-        domain = item
-    return domain.split('.')[::-1]
+        # Default: "domain" (tree-down: TLD -> subdomain)
+        return lambda item: extract_domain(item).split('.')[::-1]
 
 def main():
     parser = argparse.ArgumentParser(description="DNS blocklist compiler, router, and optimizer.")
@@ -203,6 +241,8 @@ def main():
     parser.add_argument("--topnlist", nargs='+')
     parser.add_argument("-i", "--input", choices=["domain", "hosts", "adblock"], help="Strictly enforce an input format to skip non-matching lines")
     parser.add_argument("-o", "--output", choices=["domain", "hosts", "adblock", "dnsmasq", "unbound", "rpz"], default="domain")
+    parser.add_argument("-w", "--work", help="Directory to save unmodified raw source files")
+    parser.add_argument("--sort", choices=["domain", "alphabetically", "tld"], default="domain", help="Sorting algorithm for output")
     parser.add_argument("--out-blocklist")
     parser.add_argument("--out-allowlist")
     parser.add_argument("--optimize-allowlist", action="store_true", help="Drop unused allowlist entries that do not match any blocked targets")
@@ -211,6 +251,11 @@ def main():
     args = parser.parse_args()
 
     v = args.verbose
+    sort_key = get_sort_key_func(args.sort)
+
+    if args.work:
+        os.makedirs(args.work, exist_ok=True)
+
     blocklist_domains = []
     allowlist_domains = set()
     denyallow_overrides = set()
@@ -219,7 +264,7 @@ def main():
     try:
         if v: log_msg("Consolidating Blocklists...", v)
         for bl_source in args.blocklist:
-            b, a, d = read_domains_bulk(bl_source, is_verbose=v, input_format=args.input)
+            b, a, d = read_domains_bulk(bl_source, is_verbose=v, input_format=args.input, work_dir=args.work, list_type="Blocklist")
             blocklist_domains.extend(b)
             allowlist_domains.update(a)
             denyallow_overrides.update(d)
@@ -227,7 +272,7 @@ def main():
         if args.allowlist:
             if v: log_msg("Consolidating Allowlists...", v)
             for al_source in args.allowlist:
-                b, a, d = read_domains_bulk(al_source, force_allow=True, is_verbose=v, input_format=args.input)
+                b, a, d = read_domains_bulk(al_source, force_allow=True, is_verbose=v, input_format=args.input, work_dir=args.work, list_type="Allowlist")
                 blocklist_domains.extend(b)
                 allowlist_domains.update(a)
                 denyallow_overrides.update(d)
@@ -236,7 +281,7 @@ def main():
         if args.topnlist:
             if v: log_msg("Consolidating Top-N Lists...", v)
             for topn_source in args.topnlist:
-                b, _, _ = read_domains_bulk(topn_source, is_topn=True, is_verbose=v, input_format=args.input)
+                b, _, _ = read_domains_bulk(topn_source, is_topn=True, is_verbose=v, input_format=args.input, work_dir=args.work, list_type="Top-N")
                 topn_domains.update(b)
             
     except Exception as e:
@@ -287,13 +332,6 @@ def main():
     # --- Formatting & Output Phase ---
     log_msg("Generating Outputs...", v)
     
-    try:
-        out_block = open(args.out_blocklist, 'w', encoding='utf-8') if args.out_blocklist else sys.stdout
-        out_allow = open(args.out_allowlist, 'w', encoding='utf-8') if args.out_allowlist else None
-    except Exception as e:
-        sys.stderr.write(f"Error opening output files: {e}\n")
-        sys.exit(1)
-
     adblock_rules = {dom: [] for dom in final_active}
     standalone_allows = []
     
@@ -322,56 +360,103 @@ def main():
     else:
         final_allows = allowlist_domains
 
-    if args.output == "adblock":
-        out_block.write("[Adblock Plus]\n")
-        out_block.write(f"! version: {int(time.time())}\n")
-        if out_allow:
+    has_block_payload = bool(final_active)
+    if args.output == "adblock" and not args.out_allowlist and standalone_allows:
+        has_block_payload = True
+        
+    has_allow_payload = bool(final_allows)
+
+    try:
+        if args.out_blocklist:
+            out_block = open(args.out_blocklist, 'w', encoding='utf-8') if has_block_payload else None
+        else:
+            out_block = sys.stdout if has_block_payload else None
+
+        if args.out_allowlist:
+            out_allow = open(args.out_allowlist, 'w', encoding='utf-8') if has_allow_payload else None
+        else:
+            out_allow = None
+    except Exception as e:
+        sys.stderr.write(f"Error opening output files: {e}\n")
+        sys.exit(1)
+
+    if out_block:
+        if args.output == "adblock":
+            out_block.write("[Adblock Plus]\n")
+            out_block.write(f"! version: {int(time.time())}\n")
+        elif args.output == "rpz":
+            rpz_header = "$TTL 3600\n@ IN SOA localhost. root.localhost. 1 3600 900 2592000 300\n"
+            out_block.write(rpz_header)
+            
+    if out_allow:
+        if args.output == "adblock":
             out_allow.write("[Adblock Plus]\n")
             out_allow.write(f"! version: {int(time.time())}\n")
-    elif args.output == "rpz":
-        rpz_header = "$TTL 3600\n@ IN SOA localhost. root.localhost. 1 3600 900 2592000 300\n"
-        out_block.write(rpz_header)
-        if out_allow:
+        elif args.output == "rpz":
+            rpz_header = "$TTL 3600\n@ IN SOA localhost. root.localhost. 1 3600 900 2592000 300\n"
             out_allow.write(rpz_header)
 
     if out_allow:
-        for dom in sorted(final_allows, key=domain_sort_key):
+        for dom in sorted(final_allows, key=sort_key):
             if args.output == "adblock":
                 out_allow.write(f"@@||{dom}^\n")
             elif args.output == "rpz":
                 out_allow.write(f"{dom} CNAME rpz-passthru.\n*.{dom} CNAME rpz-passthru.\n")
             else:
                 out_allow.write(f"{dom}\n")
-    elif args.output == "adblock" and standalone_allows:
-        for dom in sorted(standalone_allows, key=domain_sort_key):
+    elif args.output == "adblock" and standalone_allows and out_block:
+        for dom in sorted(standalone_allows, key=sort_key):
             out_block.write(f"@@||{dom}^\n")
 
-    output_items = list(final_active)
-    if not args.suppress_comments:
-        output_items.extend(removed_log)
+    if out_block:
+        output_items = list(final_active)
+        if not args.suppress_comments:
+            output_items.extend(removed_log)
 
-    for item in sorted(output_items, key=domain_sort_key):
-        if item.startswith('#'):
-            if args.output == "adblock": out_block.write(f"! {item[2:]}\n")
-            elif args.output == "rpz": out_block.write(f"; {item[2:]}\n")
-            else: out_block.write(f"{item}\n")
-        else:
-            if args.output == "hosts":
-                out_block.write(f"0.0.0.0 {item}\n")
-            elif args.output == "dnsmasq":
-                out_block.write(f"address=/{item}/0.0.0.0\n")
-            elif args.output == "unbound":
-                out_block.write(f"local-zone: \"{item}\" always_nxdomain\n")
-            elif args.output == "rpz":
-                out_block.write(f"{item} CNAME .\n*.{item} CNAME .\n")
-            elif args.output == "adblock":
-                exc = adblock_rules.get(item, [])
-                out_block.write(f"||{item}^$denyallow={'|'.join(sorted(exc))}\n" if exc else f"||{item}^\n")
+        for item in sorted(output_items, key=sort_key):
+            if item.startswith('#'):
+                if args.output == "adblock": out_block.write(f"! {item[2:]}\n")
+                elif args.output == "rpz": out_block.write(f"; {item[2:]}\n")
+                else: out_block.write(f"{item}\n")
             else:
-                out_block.write(f"{item}\n")
+                if args.output == "hosts":
+                    out_block.write(f"0.0.0.0 {item}\n")
+                elif args.output == "dnsmasq":
+                    out_block.write(f"address=/{item}/0.0.0.0\n")
+                elif args.output == "unbound":
+                    out_block.write(f"local-zone: \"{item}\" always_nxdomain\n")
+                elif args.output == "rpz":
+                    out_block.write(f"{item} CNAME .\n*.{item} CNAME .\n")
+                elif args.output == "adblock":
+                    exc = adblock_rules.get(item, [])
+                    out_block.write(f"||{item}^$denyallow={'|'.join(sorted(exc))}\n" if exc else f"||{item}^\n")
+                else:
+                    out_block.write(f"{item}\n")
 
-    if args.out_blocklist: out_block.close()
-    if args.out_allowlist: out_allow.close()
+        if args.out_blocklist:
+            out_block.close()
+
+    if args.out_allowlist and out_allow:
+        out_allow.close()
+
+    if v:
+        stats_unused_allows = len(allowlist_domains) - len(used_allows) if args.optimize_allowlist else 0
+        log_msg("===========================================", v)
+        log_msg("          OPTIMIZATION STATISTICS          ", v)
+        log_msg("===========================================", v)
+        log_msg(f"Total Blocklist Domains Read: {len(blocklist_domains):,}", v)
+        log_msg(f"Removed (Allowlisted)       : {stats_allowlisted:,}", v)
+        log_msg(f"Removed (Not in Top-N)      : {stats_topn:,}", v)
+        log_msg(f"Removed (Sub-domain Dedup)  : {stats_deduped:,}", v)
+        if args.optimize_allowlist:
+            log_msg(f"Dropped (Unused Allows)     : {stats_unused_allows:,}", v)
+        if args.output in ("domain", "hosts", "dnsmasq", "unbound", "rpz"):
+            log_msg(f"Ignored Allows (Blocked)    : {stats_allow_ignored:,}", v)
+        log_msg("-------------------------------------------", v)
+        log_msg(f"Final Active Domains        : {len(final_active):,}", v)
+        if args.out_allowlist:
+            log_msg(f"Exported Allowlist Domains  : {len(final_allows):,}", v)
+        log_msg("===========================================", v)
 
 if __name__ == "__main__":
     try:
