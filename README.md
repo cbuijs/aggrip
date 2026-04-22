@@ -83,6 +83,7 @@ Just `cat` some messy data through it, chain them in your Unix pipelines, and ha
   * Supports standard domain lists, HOSTS, RouteDNS, Squid, and Adblock syntax simultaneously (or rigidly enforce syntax via the `-i` / `--input` flag).
   * Automatically drops IPs, CIDRs, URL paths, Adblock regex rules (`/regex/`), and protects against truncating element hiding rules (`##`).
   * Dynamically routes inline Adblock allowlist rules (`@@||domain.com^`) found inside blocklist files directly to the allowlist.
+  * **Punycode Conversion:** Safely converts Unicode domain names to proper Punycode (`idna`) and natively logs the original Unicode domain as an inline comment attached directly to the rule in the final output block.
   * Strictly parses Adblock modifiers, enforcing `$denyallow` while rejecting non-DNS modifiers (like `$ping`).
   * Optionally drops unused allowlist entries (`--optimize-allowlist`) to keep exported exception lists strictly utilized. 
   * Customizable output formatting (`-o` / `--output`) including Plain, HOSTS, Adblock, DNSMasq, Unbound, RPZ, RouteDNS, Squid, or ALL formats generated simultaneously into a specific directory (`--all-dir`). 

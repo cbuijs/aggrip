@@ -13,7 +13,7 @@
 ## Core Features
 
 * **Multi-Format Ingestion:** Seamlessly reads Plain Domain lists, RouteDNS rules, Squid proxy ACLs, standard HOSTS formats, and Adblock DNS syntaxes simultaneously. Can be strictly locked to a single format using `--input`. Automatically neutralizes leading wildcards (`*.`) or routing markers (`.`) effectively allowing explicit formats to be seamlessly compiled and merged with traditional inputs.
-* **Strict Validation:** Automatically drops IPs, CIDR networks, URL paths, and invalid TLDs. Safely ignores Adblock Regex rules (`/regex/`) and explicitly protects Adblock element hiding rules (`##`, `#@#`) from being falsely interpreted as domains.
+* **Strict Validation & Unicode Support:** Automatically drops IPs, CIDR networks, URL paths, and invalid TLDs. Safely ignores Adblock Regex rules (`/regex/`) and explicitly protects Adblock element hiding rules (`##`, `#@#`) from being falsely interpreted as domains. If a valid Unicode domain name is found, it will systematically encode the payload to IDNA Punycode logic to ensure compatibility across all downstream firewalls/DNS resolvers, and dynamically appends an output comment reflecting the original Unicode. Both strings are checked to guarantee strict validation.
 * **Dynamic Adblock Routing:** Automatically detects Adblock allowlist rules (`@@||`) inside blocklist feeds and routes them dynamically.
 * **Strict Exception Handling:** Fully supports the Adblock `$denyallow` modifier, ensuring specific subdomains remain blocked or allowed regardless of their parent domain's status. Drops rules containing non-DNS modifiers (like `$ping` or `$third-party`).
 * **Tree-Based Deduplication:** Sorts domains by depth (TLD -> Subdomain) to guarantee that if a parent domain is blocked, all redundant subdomains are stripped out to save memory.
@@ -54,6 +54,7 @@ When domains are ingested, `clean-dom.py` cleans and verifies the input:
 * **Wildcards:** `*.example.com` becomes `example.com`
 * **Dots:** Removes leading/trailing dots.
 * **Syntax Checks:** Adblock syntaxes (`||` and `^`) are stripped. HOSTS entries (`0.0.0.0 domain.com`) are reduced to just the domain.
+* **Punycode Conversions:** Safely converts Unicode domain names to proper Punycode while protecting structure.
 * **Rejection:** It immediately discards any parsed token that evaluates as a valid IPv4/IPv6 address, a CIDR block, an Adblock Regex (`/regex/`), or a URL containing slashes.
 
 ### Dynamic Routing & Adblock Modifiers

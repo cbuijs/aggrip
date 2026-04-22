@@ -2,13 +2,15 @@
 '''
 ==========================================================================
  Filename: clean-dom.py
- Version: 0.41
- Date: 2026-04-22 11:37 CEST
+ Version: 0.42
+ Date: 2026-04-22 13:00 CEST
  Description: Optimize a highly efficient DNS blocklist. Consolidates lists, 
               routes dynamically, enforces $denyallow modifiers, deduplicates 
-              redundant subdomains, optionally optimizes allowlists, and exports.
+              redundant subdomains, punycode conversions, optionally optimizes 
+              allowlists, and exports.
  
  Changes/Fixes:
+ - v0.42 (2026-04-22): Added Punycode conversion for Unicode domain names and comment annotations.
  - v0.41 (2026-04-22): Added dual-pass output to generate both Full and Top-N files when '-o all' is used.
  - v0.40 (2026-04-22): Fixed NameError exception for 'final_active' variable in formatting loop.
  - v0.39 (2026-04-22): Added 'squid' input format and output format support.
@@ -18,7 +20,6 @@
  - v0.35 (2026-04-22): Continue processing instead of aborting on download/file retrieval errors.
  - v0.34 (2026-04-22): Added '-o all' and '--all-dir' parameters to export all formats at once.
  - v0.33 (2026-04-22): Added --sort parameter for domain, alphabetically (natural), and tld sort.
- - v0.32 (2026-04-22): Suppressed creation of empty output files (or files containing only comments).
 ==========================================================================
 '''
 
@@ -35,6 +36,7 @@ NULL_IPS = {'0.0.0.0', '127.0.0.1', '::', '::1'}
 
 # Strict regex to ensure we only extract clean, valid domain names. Drops paths/URLs.
 DOMAIN_PATTERN = re.compile(r'^([a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?\.)+[a-z0-9\-]{2,}$')
+UNICODE_DOMAIN_PATTERN = re.compile(r'^([a-z0-9\u00a1-\uffff]([a-z0-9\u00a1-\uffff\-]{0,61}[a-z0-9\u00a1-\uffff])?\.)+[a-z0-9\u00a1-\uffff\-]{2,}$', re.IGNORECASE)
 
 def log_msg(msg, is_verbose):
     """Prints a message to STDERR if verbose mode is enabled."""
@@ -76,6 +78,7 @@ def parse_domain_token(token):
     """Parses Adblock syntax, extracting the domain, allowlist status, and denyallow subdomains."""
     is_allow = False
     denyallow_domains = []
+    denyallow_unicode_map = {}
     original_token = token
     
     if token.startswith('@@'):
@@ -88,7 +91,9 @@ def parse_domain_token(token):
             'domain': None,
             'is_allow': False,
             'denyallow': [],
-            'original_token': original_token
+            'original_token': original_token,
+            'unicode_orig': None,
+            'denyallow_unicode_map': {}
         }
         
     if '$' in token:
@@ -99,36 +104,72 @@ def parse_domain_token(token):
         mod_list = [m.strip() for m in modifiers.split(',') if m.strip()]
         
         # Strictly enforce that only a single '$denyallow' modifier is permitted.
-        # Any other modifiers (e.g., $ping, $third-party), or multiple modifiers, 
-        # invalidate the rule for pure DNS blocking purposes.
         if len(mod_list) > 1 or (len(mod_list) == 1 and not mod_list[0].startswith('denyallow=')):
             return {
                 'domain': None,
                 'is_allow': False,
                 'denyallow': [],
-                'original_token': original_token
+                'original_token': original_token,
+                'unicode_orig': None,
+                'denyallow_unicode_map': {}
             }
             
         if len(mod_list) == 1 and mod_list[0].startswith('denyallow='):
             da_list = mod_list[0][len('denyallow='):].split('|')
             for da_dom in da_list:
                 clean_da = normalize_domain(da_dom)
-                if clean_da and DOMAIN_PATTERN.match(clean_da) and not is_ip_or_cidr(clean_da):
-                    denyallow_domains.append(clean_da)
+                puny_da = clean_da
+                da_orig = None
+                if clean_da and not clean_da.isascii():
+                    try:
+                        puny_da = clean_da.encode('idna').decode('ascii')
+                        da_orig = clean_da
+                    except Exception:
+                        puny_da = None
+                
+                if clean_da and puny_da:
+                    valid_da = False
+                    if da_orig:
+                        valid_da = UNICODE_DOMAIN_PATTERN.match(clean_da) and DOMAIN_PATTERN.match(puny_da) and not is_ip_or_cidr(puny_da)
+                    else:
+                        valid_da = DOMAIN_PATTERN.match(puny_da) and not is_ip_or_cidr(puny_da)
+                    
+                    if valid_da:
+                        denyallow_domains.append(puny_da)
+                        if da_orig:
+                            denyallow_unicode_map[puny_da] = da_orig
     else:
         domain_part = token
         
     clean_dom = normalize_domain(domain_part)
-    
-    # Strictly enforce valid domain syntax, dropping pure URL/Path rules and IP/CIDRs
-    if clean_dom and (not DOMAIN_PATTERN.match(clean_dom) or is_ip_or_cidr(clean_dom)):
-        clean_dom = None
+    puny_dom = clean_dom
+    dom_orig = None
+    if clean_dom and not clean_dom.isascii():
+        try:
+            puny_dom = clean_dom.encode('idna').decode('ascii')
+            dom_orig = clean_dom
+        except Exception:
+            puny_dom = None
+            
+    if clean_dom and puny_dom:
+        valid_dom = False
+        if dom_orig:
+            valid_dom = UNICODE_DOMAIN_PATTERN.match(clean_dom) and DOMAIN_PATTERN.match(puny_dom) and not is_ip_or_cidr(puny_dom)
+        else:
+            valid_dom = DOMAIN_PATTERN.match(puny_dom) and not is_ip_or_cidr(puny_dom)
+            
+        if not valid_dom:
+            puny_dom = None
+    else:
+        puny_dom = None
     
     return {
-        'domain': clean_dom,
+        'domain': puny_dom,
         'is_allow': is_allow,
         'denyallow': denyallow_domains,
-        'original_token': original_token
+        'original_token': original_token,
+        'unicode_orig': dom_orig,
+        'denyallow_unicode_map': denyallow_unicode_map
     }
 
 def get_lines(source):
@@ -143,7 +184,7 @@ def get_lines(source):
             for line in f:
                 yield line
 
-def read_domains(source, is_topn=False, force_allow=False, is_verbose=False, input_format=None, work_dir=None, list_type="Unknown"):
+def read_domains(source, conversion_log, is_topn=False, force_allow=False, is_verbose=False, input_format=None, work_dir=None, list_type="Unknown"):
     """Reads a file or URL and routes domains into block, allow, and denyallow lists."""
     block_domains = []
     allow_domains = []
@@ -161,6 +202,9 @@ def read_domains(source, is_topn=False, force_allow=False, is_verbose=False, inp
             else:
                 block_domains.append(parsed['domain'])
                 
+            if parsed.get('unicode_orig'):
+                conversion_log.append(f"# {parsed['domain']} - Converted from Unicode: {parsed['unicode_orig']}")
+                
         if parsed['denyallow']:
             log_msg(f"Extracted $denyallow domain(s): {', '.join(parsed['denyallow'])} (from '{raw_token}')", is_verbose)
             
@@ -169,6 +213,10 @@ def read_domains(source, is_topn=False, force_allow=False, is_verbose=False, inp
                 denyallow_overrides.extend(parsed['denyallow'])
             else:
                 allow_domains.extend(parsed['denyallow'])
+                
+            if parsed.get('denyallow_unicode_map'):
+                for puny_da, orig_da in parsed['denyallow_unicode_map'].items():
+                    conversion_log.append(f"# {puny_da} - Converted from Unicode: {orig_da}")
 
     raw_file = None
     if work_dir:
@@ -186,9 +234,6 @@ def read_domains(source, is_topn=False, force_allow=False, is_verbose=False, inp
             if not raw_line or raw_line.startswith('!'):
                 continue
                 
-            # If a '#' appears before any space, it's an Adblock element hiding rule (domain.com##...)
-            # snippet/injection (domain.com#%#), URL anchor, or full line comment. Skip it to prevent
-            # truncating it into a false-positive domain.
             first_hash = raw_line.find('#')
             if first_hash != -1:
                 if first_hash == 0:
@@ -207,8 +252,26 @@ def read_domains(source, is_topn=False, force_allow=False, is_verbose=False, inp
                 parts = line.split(',', 1)
                 if len(parts) > 1:
                     dom = normalize_domain(parts[1])
-                    if dom and DOMAIN_PATTERN.match(dom) and not is_ip_or_cidr(dom):
-                        block_domains.append(dom)
+                    puny_dom = dom
+                    dom_orig = None
+                    if dom and not dom.isascii():
+                        try:
+                            puny_dom = dom.encode('idna').decode('ascii')
+                            dom_orig = dom
+                        except Exception:
+                            puny_dom = None
+                    
+                    if dom and puny_dom:
+                        valid_dom = False
+                        if dom_orig:
+                            valid_dom = UNICODE_DOMAIN_PATTERN.match(dom) and DOMAIN_PATTERN.match(puny_dom) and not is_ip_or_cidr(puny_dom)
+                        else:
+                            valid_dom = DOMAIN_PATTERN.match(puny_dom) and not is_ip_or_cidr(puny_dom)
+                            
+                        if valid_dom:
+                            block_domains.append(puny_dom)
+                            if dom_orig:
+                                conversion_log.append(f"# {puny_dom} - Converted from Unicode: {dom_orig}")
                 continue
             
             parts = line.split()
@@ -217,7 +280,6 @@ def read_domains(source, is_topn=False, force_allow=False, is_verbose=False, inp
                 
             first_token = parts[0]
             
-            # Determine the line syntax heuristic for strict format checking
             is_hosts = is_ip_or_cidr(first_token)
             is_adblock = not is_hosts and (first_token.startswith('@@') or first_token.startswith('||') or '^' in first_token or '$' in first_token or first_token.startswith('/'))
             is_routedns = not is_hosts and not is_adblock and (first_token.startswith('.') or first_token.startswith('*.'))
@@ -264,12 +326,10 @@ def get_sort_key_func(sort_type):
         return [int(c) if c.isdigit() else c for c in re.split(r'(\d+)', text)]
 
     if sort_type == "alphabetically":
-        # Tuple forces natural domain string -> places actual domain (False/0) BEFORE its comments (True/1)
         return lambda item: (natural_keys(extract_domain(item)), item.startswith('#'), item)
     elif sort_type == "tld":
         return lambda item: (extract_domain(item).split('.')[-1], natural_keys(extract_domain(item)), item.startswith('#'), item)
     else:
-        # Default: "domain" (tree-down: TLD -> subdomain)
         return lambda item: (extract_domain(item).split('.')[::-1], item.startswith('#'), item)
 
 def main():
@@ -302,11 +362,12 @@ def main():
     blocklist_domains = []
     allowlist_domains = set()
     denyallow_overrides = set()
+    conversion_log = []
 
     if v: log_msg("--- Stage 1: Consolidating Blocklists ---", v)
     for bl_source in args.blocklist:
         try:
-            b, a, d = read_domains(bl_source, is_verbose=v, input_format=args.input, work_dir=args.work, list_type="Blocklist")
+            b, a, d = read_domains(bl_source, conversion_log, is_verbose=v, input_format=args.input, work_dir=args.work, list_type="Blocklist")
             blocklist_domains.extend(b)
             allowlist_domains.update(a)
             denyallow_overrides.update(d)
@@ -317,7 +378,7 @@ def main():
         if v: log_msg("--- Stage 2: Consolidating Allowlists ---", v)
         for al_source in args.allowlist:
             try:
-                b, a, d = read_domains(al_source, force_allow=True, is_verbose=v, input_format=args.input, work_dir=args.work, list_type="Allowlist")
+                b, a, d = read_domains(al_source, conversion_log, force_allow=True, is_verbose=v, input_format=args.input, work_dir=args.work, list_type="Allowlist")
                 blocklist_domains.extend(b)
                 allowlist_domains.update(a)
                 denyallow_overrides.update(d)
@@ -329,7 +390,7 @@ def main():
         if v: log_msg("--- Stage 3: Consolidating Top-N Lists ---", v)
         for topn_source in args.topnlist:
             try:
-                b, _, _ = read_domains(topn_source, is_topn=True, is_verbose=v, input_format=args.input, work_dir=args.work, list_type="Top-N")
+                b, _, _ = read_domains(topn_source, conversion_log, is_topn=True, is_verbose=v, input_format=args.input, work_dir=args.work, list_type="Top-N")
                 topn_domains.update(b)
             except Exception as e:
                 sys.stderr.write(f"Error reading source '{topn_source}': {e}\n")
@@ -376,7 +437,6 @@ def main():
                     stats_topn += 1
                     continue
                     
-            # Retain original domains strictly before deduplication processes
             filtered_blocks.add(domain)
 
         log_msg(f"Executing O(N log N) subdomain deduplication {pass_name}...", v)
@@ -516,11 +576,14 @@ def main():
 
             # WRITE BLOCKS
             if out_block:
+                active_conversions = [c for c in conversion_log if c[2:].split(' - ', 1)[0] in (filtered_blocks if fmt == "hosts" else final_active)]
+                
                 if fmt == "hosts":
                     output_items = list(filtered_blocks)
                     if not args.suppress_comments:
                         output_items.extend(removed_log_general)
                         output_items.extend(removed_log_unused_allows)
+                        output_items.extend(active_conversions)
                 else:
                     output_items = list(final_active)
                     if not args.suppress_comments:
@@ -528,6 +591,7 @@ def main():
                         output_items.extend(removed_log_dedup)
                         output_items.extend(removed_log_parent_blocked)
                         output_items.extend(removed_log_unused_allows)
+                        output_items.extend(active_conversions)
 
                 for item in sorted(output_items, key=sort_key):
                     if item.startswith('#'):
@@ -577,7 +641,6 @@ def main():
                 log_msg(f"Exported Allowlist Domains  : {len(final_allows):,}", v)
             log_msg("====================================================", v)
 
-    # Trigger output execution based on Top-N parameters
     if args.output == "all" and args.topnlist:
         build_outputs(None, "", False)
         build_outputs(topn_domains, ".top-n", True)
