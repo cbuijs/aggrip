@@ -2,17 +2,20 @@
 '''
 ==========================================================================
  Filename: clean-dom.py
- Version: 0.24
- Date: 2026-04-16 15:00 CEST
+ Version: 0.27
+ Date: 2026-04-22 09:55 CEST
  Description: Optimize a highly efficient DNS blocklist. Consolidates lists, 
               routes dynamically, enforces $denyallow modifiers, deduplicates 
               redundant subdomains, optionally optimizes allowlists, and exports.
  
  Changes/Fixes:
+ - v0.27 (2026-04-22): Explicitly ignored Adblock/AdGuard regex rules (/regex/).
+ - v0.26 (2026-04-22): Added -i/--input parameter to strictly enforce input formats.
+ - v0.25 (2026-04-22): Added strict regex validation to drop invalid paths/URLs.
+                       Ignored rules with unsupported modifiers (e.g., $ping).
  - v0.24 (2026-04-16): Added $TTL and fake SOA record to RPZ header.
  - v0.23 (2026-04-16): Updated RPZ output to include wildcard subdomains.
  - v0.22 (2026-04-16): Added dnsmasq, unbound, and rpz output formats.
- - v0.21 (2026-04-15): Made allowlist optimization configurable, added logging.
 ==========================================================================
 '''
 
@@ -21,8 +24,12 @@ import sys
 import ipaddress
 import urllib.request
 import time
+import re
 
 NULL_IPS = {'0.0.0.0', '127.0.0.1', '::', '::1'}
+
+# Strict regex to ensure we only extract clean, valid domain names. Drops paths/URLs.
+DOMAIN_PATTERN = re.compile(r'^([a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?\.)+[a-z0-9\-]{2,}$')
 
 def log_msg(msg, is_verbose):
     """Prints a message to STDERR if verbose mode is enabled."""
@@ -64,10 +71,20 @@ def parse_domain_token(token):
     """Parses Adblock syntax, extracting the domain, allowlist status, and denyallow subdomains."""
     is_allow = False
     denyallow_domains = []
+    original_token = token
     
     if token.startswith('@@'):
         is_allow = True
         token = token[2:]
+        
+    # Explicitly drop Adblock/AdGuard regex rules (e.g., /banner\d+/)
+    if token.startswith('/'):
+        return {
+            'domain': None,
+            'is_allow': False,
+            'denyallow': [],
+            'original_token': original_token
+        }
         
     if '$' in token:
         parts = token.split('$', 1)
@@ -75,22 +92,35 @@ def parse_domain_token(token):
         modifiers = parts[1]
         
         for mod in modifiers.split(','):
+            mod = mod.strip()
             if mod.startswith('denyallow='):
                 da_list = mod[len('denyallow='):].split('|')
                 for da_dom in da_list:
                     clean_da = normalize_domain(da_dom)
-                    if clean_da:
+                    if clean_da and DOMAIN_PATTERN.match(clean_da):
                         denyallow_domains.append(clean_da)
+            elif mod:
+                # Unsupported meta-option (e.g. $ping), discard the entire rule safely
+                return {
+                    'domain': None,
+                    'is_allow': False,
+                    'denyallow': [],
+                    'original_token': original_token
+                }
     else:
         domain_part = token
         
     clean_dom = normalize_domain(domain_part)
     
+    # Strictly enforce valid domain syntax, dropping pure URL/Path rules (e.g., domain.com/path/*)
+    if clean_dom and not DOMAIN_PATTERN.match(clean_dom):
+        clean_dom = None
+    
     return {
         'domain': clean_dom,
         'is_allow': is_allow,
         'denyallow': denyallow_domains,
-        'original_token': token
+        'original_token': original_token
     }
 
 def get_lines(source):
@@ -105,7 +135,7 @@ def get_lines(source):
             for line in f:
                 yield line
 
-def read_domains(source, is_topn=False, force_allow=False, is_verbose=False):
+def read_domains(source, is_topn=False, force_allow=False, is_verbose=False, input_format=None):
     """Reads a file or URL and routes domains into block, allow, and denyallow lists."""
     block_domains = []
     allow_domains = []
@@ -138,10 +168,12 @@ def read_domains(source, is_topn=False, force_allow=False, is_verbose=False):
             continue
         
         if is_topn and ',' in line:
+            if input_format and input_format != "domain":
+                continue
             parts = line.split(',', 1)
             if len(parts) > 1:
                 dom = normalize_domain(parts[1])
-                if dom:
+                if dom and DOMAIN_PATTERN.match(dom):
                     block_domains.append(dom)
             continue
         
@@ -151,7 +183,17 @@ def read_domains(source, is_topn=False, force_allow=False, is_verbose=False):
             
         first_token = parts[0]
         
-        if is_valid_ip(first_token):
+        # Determine the line syntax heuristic for strict format checking
+        is_hosts = is_valid_ip(first_token)
+        is_adblock = not is_hosts and (first_token.startswith('@@') or first_token.startswith('||') or '^' in first_token or '$' in first_token or first_token.startswith('/'))
+        is_domain = not is_hosts and not is_adblock
+
+        if input_format:
+            if input_format == 'hosts' and not is_hosts: continue
+            if input_format == 'adblock' and not is_adblock: continue
+            if input_format == 'domain' and not is_domain: continue
+        
+        if is_hosts:
             if first_token in NULL_IPS:
                 for part in parts[1:]:
                     process_parsed(parse_domain_token(part), part)
@@ -184,6 +226,7 @@ def main():
     parser.add_argument("--blocklist", nargs='+', required=True, help="Path(s) or URL(s) to the DNS blocklist(s)")
     parser.add_argument("--allowlist", nargs='+', help="Optional path(s) or URL(s) to the DNS allowlist(s)")
     parser.add_argument("--topnlist", nargs='+', help="Optional path(s) or URL(s) to Top-N list(s)")
+    parser.add_argument("-i", "--input", choices=["domain", "hosts", "adblock"], help="Strictly enforce an input format to skip non-matching lines")
     parser.add_argument("-o", "--output", choices=["domain", "hosts", "adblock", "dnsmasq", "unbound", "rpz"], default="domain", 
                         help="Output format: 'domain' (default), 'hosts', 'adblock', 'dnsmasq', 'unbound', or 'rpz'")
     parser.add_argument("--out-blocklist", help="Optional file path to write the blocklist output (default: STDOUT)")
@@ -202,7 +245,7 @@ def main():
     try:
         if v: log_msg("--- Stage 1: Consolidating Blocklists ---", v)
         for bl_source in args.blocklist:
-            b, a, d = read_domains(bl_source, is_verbose=v)
+            b, a, d = read_domains(bl_source, is_verbose=v, input_format=args.input)
             blocklist_domains.extend(b)
             allowlist_domains.update(a)
             denyallow_overrides.update(d)
@@ -210,7 +253,7 @@ def main():
         if args.allowlist:
             if v: log_msg("--- Stage 2: Consolidating Allowlists ---", v)
             for al_source in args.allowlist:
-                b, a, d = read_domains(al_source, force_allow=True, is_verbose=v)
+                b, a, d = read_domains(al_source, force_allow=True, is_verbose=v, input_format=args.input)
                 blocklist_domains.extend(b)
                 allowlist_domains.update(a)
                 denyallow_overrides.update(d)
@@ -219,7 +262,7 @@ def main():
         if args.topnlist:
             if v: log_msg("--- Stage 3: Consolidating Top-N Lists ---", v)
             for topn_source in args.topnlist:
-                b, _, _ = read_domains(topn_source, is_topn=True, is_verbose=v)
+                b, _, _ = read_domains(topn_source, is_topn=True, is_verbose=v, input_format=args.input)
                 topn_domains.update(b)
             
     except Exception as e:
