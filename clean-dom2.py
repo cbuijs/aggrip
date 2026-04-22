@@ -2,13 +2,14 @@
 '''
 ==========================================================================
  Filename: clean-dom2.py
- Version: 0.44
- Date: 2026-04-22 11:37 CEST
- Description: Enterprise-grade DNS blocklist optimizer. Ingests massive 
-              blocklists, applying cross-references, modifiers ($denyallow), 
-              optionally optimizes allowlists, and deduplicates via reverse sort.
+ Version: 0.45
+ Date: 2026-04-22 12:04 CEST
+ Description: Enterprise-grade DNS blocklist optimizer. Features upfront 
+              file format detection for massive ingestion speedups, applies 
+              cross-references, deduplicates via O(N log N) reverse sort.
  
  Changes/Fixes:
+ - v0.45 (2026-04-22): Implemented upfront file format detection to bypass per-line heuristic checks, drastically speeding up bulk loading.
  - v0.44 (2026-04-22): Added dual-pass output to generate both Full and Top-N files when '-o all' is used.
  - v0.43 (2026-04-22): Sync version with clean-dom.py fixes for final_active scope.
  - v0.42 (2026-04-22): Added 'squid' input format and output format support.
@@ -18,7 +19,6 @@
  - v0.38 (2026-04-22): Continue processing instead of aborting on download/file retrieval errors.
  - v0.37 (2026-04-22): Added '-o all' and '--all-dir' parameters to export all formats at once.
  - v0.36 (2026-04-22): Added --sort parameter for domain, alphabetically (natural), and tld sort.
- - v0.35 (2026-04-22): Suppressed creation of empty output files (or files containing only comments).
 ==========================================================================
 '''
 
@@ -53,6 +53,42 @@ def is_ip_or_cidr(token):
         except ValueError:
             pass
     return False
+
+def detect_format(lines):
+    """Samples the first 50 valid lines to heuristically determine the file format, bypassing per-line checks."""
+    counts = {'hosts': 0, 'adblock': 0, 'routedns': 0, 'squid': 0, 'domain': 0}
+    valid_lines = 0
+    for raw_line in lines:
+        if valid_lines >= 50: break
+        line = raw_line.strip()
+        if not line or line.startswith('!') or line.startswith('#'): continue
+        
+        first_hash = line.find('#')
+        if first_hash != -1:
+            if first_hash == 0: continue
+            first_space = line.find(' ')
+            if first_space == -1 or first_hash < first_space: continue
+        
+        line = line.split('#')[0].strip()
+        if not line: continue
+        
+        parts = line.split()
+        if not parts: continue
+        first_token = parts[0]
+        
+        if is_ip_or_cidr(first_token): counts['hosts'] += 1
+        elif first_token.startswith('@@') or first_token.startswith('||') or '^' in first_token or '$' in first_token or first_token.startswith('/'): counts['adblock'] += 1
+        elif first_token.startswith('.') or first_token.startswith('*.'): counts['routedns'] += 1
+        else: counts['domain'] += 1
+        
+        valid_lines += 1
+        
+    if valid_lines == 0: return 'mixed'
+    best_match = max(counts, key=counts.get)
+    # If 80%+ of the sample matches one format, lock the parser
+    if counts[best_match] / valid_lines >= 0.8:
+        return best_match
+    return 'mixed'
 
 def normalize_domain(domain):
     """Strips noise from input data: Adblock syntax, wildcards, dots."""
@@ -132,7 +168,9 @@ def read_domains_bulk(source, is_topn=False, force_allow=False, is_verbose=False
     allow_domains = []
     denyallow_overrides = []
     
-    log_msg(f"Bulk loading data from: {source}", is_verbose)
+    lines = get_lines_bulk(source)
+    detected_format = input_format or detect_format(lines)
+    log_msg(f"Bulk loading data from: {source} (Format: {detected_format.upper()})", is_verbose)
     
     def process_parsed(parsed, raw_token):
         if parsed['domain']:
@@ -145,8 +183,6 @@ def read_domains_bulk(source, is_topn=False, force_allow=False, is_verbose=False
                 denyallow_overrides.extend(parsed['denyallow'])
             else:
                 allow_domains.extend(parsed['denyallow'])
-
-    lines = get_lines_bulk(source)
 
     if work_dir:
         source_hash = hashlib.sha256(source.encode('utf-8')).hexdigest()[:16]
@@ -188,12 +224,24 @@ def read_domains_bulk(source, is_topn=False, force_allow=False, is_verbose=False
             
         first_token = parts[0]
         
-        # Determine the line syntax heuristic for strict format checking
-        is_hosts = is_ip_or_cidr(first_token)
-        is_adblock = not is_hosts and (first_token.startswith('@@') or first_token.startswith('||') or '^' in first_token or '$' in first_token or first_token.startswith('/'))
-        is_routedns = not is_hosts and not is_adblock and (first_token.startswith('.') or first_token.startswith('*.'))
-        is_squid = not is_hosts and not is_adblock and first_token.startswith('.')
-        is_domain = not is_hosts and not is_adblock and not is_routedns and not is_squid
+        # Extremely fast syntax routing: completely skips string matches and regexes 
+        # on every line if the format was definitively detected upfront.
+        if detected_format != 'mixed':
+            is_hosts = (detected_format == 'hosts')
+            is_adblock = (detected_format == 'adblock')
+            is_routedns = (detected_format == 'routedns')
+            is_squid = (detected_format == 'squid')
+            is_domain = (detected_format == 'domain')
+            
+            # Fast-path failure check for hosts files mixed with pure domains
+            if is_hosts and not is_ip_or_cidr(first_token):
+                continue
+        else:
+            is_hosts = is_ip_or_cidr(first_token)
+            is_adblock = not is_hosts and (first_token.startswith('@@') or first_token.startswith('||') or '^' in first_token or '$' in first_token or first_token.startswith('/'))
+            is_routedns = not is_hosts and not is_adblock and (first_token.startswith('.') or first_token.startswith('*.'))
+            is_squid = not is_hosts and not is_adblock and first_token.startswith('.')
+            is_domain = not is_hosts and not is_adblock and not is_routedns and not is_squid
 
         if input_format:
             if input_format == 'hosts' and not is_hosts: continue
