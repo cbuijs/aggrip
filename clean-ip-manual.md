@@ -6,7 +6,8 @@
 1. [Core Features](#core-features)
 2. [Command-Line Arguments](#command-line-arguments)
 3. [Understanding the Logic](#understanding-the-logic)
-4. [Usage Examples](#usage-examples)
+4. [Supported Input & Output Formats](#supported-input--output-formats)
+5. [Usage Examples](#usage-examples)
 
 ---
 
@@ -55,6 +56,22 @@ When IPs are ingested, `clean-ip.py` normalizes them into standard network objec
 Unlike domain names where blocking a parent inherently blocks the child, IP subnets work via routing calculations.
 1. **Total Eclipse:** If `10.0.0.0/24` is blocklisted, but `10.0.0.0/16` is allowlisted, the blocklist rule is entirely removed because it is fully encompassed by the allowlist.
 2. **Fracturing:** If `10.0.0.0/23` is blocklisted, but `10.0.0.0/24` is allowlisted, the engine mathematically "punches a hole" in the blocklist, outputting only `10.0.1.0/24` as the remaining blocked space. An inline comment is appended right above the rule to log this fracture.
+
+---
+
+## Supported Input & Output Formats
+
+Both tools dynamically support various string inputs seamlessly without needing explicit format flags during ingestion. Output formats are specified using the `-o` argument.
+
+| Format Type | Input Example | Output Example |
+| :--- | :--- | :--- |
+| **CIDR** (Default) | `192.168.1.0/24` or `10.0.0.1` | `192.168.1.0/24` |
+| **Netmask** | `192.168.1.0/255.255.255.0` | `192.168.1.0/255.255.255.0` |
+| **IP-Range** | `10.0.0.1 - 10.0.0.10` <br> `10.0.0.1 10.0.0.10` | `10.0.0.1-10.0.0.10` <br> *(Spacing adjustable via `--range-sep`)* |
+| **Cisco ACL** | `deny ip 10.0.0.0 0.0.0.255 any` | `deny ip 10.0.0.0 0.0.0.255 any` <br> *(Outputs `permit` for allowlists)* |
+| **iptables** | `-A INPUT -s 10.0.0.0/24 -j DROP` | `-A INPUT -s 10.0.0.0/24 -j DROP` <br> *(Outputs `ACCEPT` for allowlists)* |
+| **MikroTik** | `add address=10.0.0.0/24 list=blocklist` | `add address=10.0.0.0/24 list=blocklist` <br> *(Outputs `allowlist` for allowlists)* |
+| **Padded IP** | `010.000.000.000/24` | `010.000.000.000/24` |
 
 ---
 
