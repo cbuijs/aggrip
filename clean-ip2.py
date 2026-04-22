@@ -2,9 +2,10 @@
 '''
 ==========================================================================
  Filename: clean-ip2.py
- Version: 0.15
- Date: 2026-04-22 15:30 CEST
+ Version: 0.16
+ Date: 2026-04-22 16:30 CEST
  Changes:
+ - v0.16 (2026-04-22): Added netmask output/input format, optimized range output to remove whitespaces, and added --range-sep param.
  - v0.15 (2026-04-22): Fixed TypeError during final subnet collapse of mixed IPv4/IPv6 blocks.
  - v0.14 (2026-04-22): Added IP-aware sorting lambda to safely process mixed IPv4/IPv6 lists and force IPv4 output first.
  - v0.13 (2026-04-22): Moved punch-hole comments inline directly between the fragmented CIDR blocks.
@@ -44,7 +45,7 @@ def is_fast_ip(token):
     return c.isdigit() or ':' in c or c == '-'
 
 def read_ips_bulk(source, is_verbose, strict):
-    """Reads lines natively in bulk and parses networks."""
+    """Reads lines natively in bulk and parses networks (supports CIDR, netmask, ranges)."""
     networks = []
     log_msg(f"Bulk loading data from: {source}", is_verbose)
     lines = get_lines_bulk(source)
@@ -88,10 +89,13 @@ def read_ips_bulk(source, is_verbose, strict):
                 
     return networks
 
-def format_network(net, fmt):
+def format_network(net, fmt, range_sep="dash"):
     """Formats the IP network block into the requested output syntax."""
     if fmt == "cidr": return str(net)
-    elif fmt == "range": return f"{net[0]} - {net[-1]}"
+    elif fmt == "netmask": return f"{net.network_address}/{net.netmask}"
+    elif fmt == "range": 
+        sep = " " if range_sep == "space" else "-"
+        return f"{net[0]}{sep}{net[-1]}"
     elif fmt == "cisco": return f"deny ip {net.network_address} {net.hostmask} any"
     elif fmt == "iptables": return f"-A INPUT -s {net} -j DROP"
     elif fmt == "mikrotik": return f"add address={net} list=blocklist"
@@ -104,18 +108,19 @@ def format_network(net, fmt):
             return f"{net.network_address.exploded}/{net.prefixlen}"
     return str(net)
 
-def format_allow_network(net, fmt):
+def format_allow_network(net, fmt, range_sep="dash"):
     """Formats allowlist output syntax."""
     if fmt == "cisco": return f"permit ip {net.network_address} {net.hostmask} any"
     elif fmt == "iptables": return f"-A INPUT -s {net} -j ACCEPT"
     elif fmt == "mikrotik": return f"add address={net} list=allowlist"
-    return format_network(net, fmt)
+    return format_network(net, fmt, range_sep)
 
 def main():
     parser = argparse.ArgumentParser(description="Optimize an IP blocklist (Fast Bulk Variant).")
     parser.add_argument("--blocklist", nargs='+', required=True, help="Path(s) or URL(s) to the IP blocklist(s)")
     parser.add_argument("--allowlist", nargs='+', help="Optional path(s) or URL(s) to the IP allowlist(s)")
-    parser.add_argument("-o", "--output", choices=["cidr", "range", "cisco", "iptables", "mikrotik", "padded"], default="cidr", help="Output format")
+    parser.add_argument("-o", "--output", choices=["cidr", "netmask", "range", "cisco", "iptables", "mikrotik", "padded"], default="cidr", help="Output format")
+    parser.add_argument("--range-sep", choices=["space", "dash"], default="dash", help="Separator for range output (default: dash)")
     parser.add_argument("--out-blocklist", help="Optional file path to write the blocklist output")
     parser.add_argument("--out-allowlist", help="Optional file path to write the allowlist output")
     parser.add_argument("--optimize-allowlist", action="store_true", help="Drop unused allowlist entries")
@@ -226,7 +231,7 @@ def main():
 
     if out_a:
         # Strict IP-aware sort guarantees IPv4 first, then IPv6
-        out_buffer_a.extend(f"{format_allow_network(n, args.output)}" for n in sorted(final_allows, key=lambda x: (x.version, int(x.network_address), x.prefixlen)))
+        out_buffer_a.extend(f"{format_allow_network(n, args.output, args.range_sep)}" for n in sorted(final_allows, key=lambda x: (x.version, int(x.network_address), x.prefixlen)))
         out_a.write('\n'.join(out_buffer_a) + '\n')
         out_a.close()
 
@@ -238,7 +243,7 @@ def main():
     # Combine blocks and punch-hole comments into an inline sortable stream
     inline_stream = []
     for net in final_blocks:
-        inline_stream.append((net.version, int(net.network_address), net.prefixlen, 1, format_network(net, args.output)))
+        inline_stream.append((net.version, int(net.network_address), net.prefixlen, 1, format_network(net, args.output, args.range_sep)))
         
     for allow, orig_block in punched_holes:
         comment = f"# {allow} - Punched mathematical exception hole inside {orig_block}"
