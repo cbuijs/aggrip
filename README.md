@@ -1,14 +1,3 @@
-# ==========================================================================
-# Filename: README.md
-# Version: 1.2
-# Date: 2026-04-22 16:30 CEST
-# Changes:
-# - v1.2 (2026-04-22): Updated docs for clean-ip and clean-ip2 reflecting netmask 
-#                      and range-sep additions.
-# - v1.1 (2026-04-22): Added documentation for clean-ip.py and clean-ip2.py.
-# - v1.0 (2026-04-01): Initial documentation.
-# ==========================================================================
-
 # Aggrip  - IP, CIDR and DNS Domain Utilities
 
 A collection of highly optimized Python 3 command-line utilities for processing, aggregating, and sorting IP addresses, CIDR networks, and DNS domain lists. These tools are designed for high-performance pipeline operations in Unix-like environments.
