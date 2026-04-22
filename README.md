@@ -129,6 +129,7 @@ For deep-dive instructions, logic explanations, and comprehensive format coverag
 
 *Use the `--range-sep` parameter when compiling ranges to dictate output format spacings (IP-IP or IP IP).*
 *Use the `-v` or `--verbose` flag to print loading progress, processing stages, and a final deduplication statistics summary to STDERR.*
+*See [clean-ip-manual.md](clean-ip-manual.md) for more details.*
 
 ### For `clean-dom.py` and `clean-dom2.py`:
 
@@ -146,6 +147,7 @@ For deep-dive instructions, logic explanations, and comprehensive format coverag
                    [-v | --verbose]
 
 *Use the `-o all` parameter combined with `--all-dir` to dynamically generate all supported output formats in a single pass.*
+*Use the `-v` or `--verbose` flag to print loading progress, processing stages, and a final statistics summary to STDERR.*
 *See [clean-dom-manual.md](clean-dom-manual.md) for more details.*
 
 ---
