@@ -80,14 +80,16 @@ Just `cat` some messy data through it, chain them in your Unix pipelines, and ha
   
   **Advanced parsing and routing features:**
   * Accepts local file paths and remote URLs (`http://` or `https://`).
-  * Supports standard domain lists, HOSTS, and Adblock syntax simultaneously (or rigidly enforce syntax via the `-i` / `--input` flag).
+  * Supports standard domain lists, HOSTS, RouteDNS, Squid, and Adblock syntax simultaneously (or rigidly enforce syntax via the `-i` / `--input` flag).
   * Automatically drops IPs, CIDRs, URL paths, Adblock regex rules (`/regex/`), and protects against truncating element hiding rules (`##`).
   * Dynamically routes inline Adblock allowlist rules (`@@||domain.com^`) found inside blocklist files directly to the allowlist.
   * Strictly parses Adblock modifiers, enforcing `$denyallow` while rejecting non-DNS modifiers (like `$ping`).
   * Optionally drops unused allowlist entries (`--optimize-allowlist`) to keep exported exception lists strictly utilized. 
-  * Customizable output formatting (`-o` / `--output`) including Plain, HOSTS, Adblock, DNSMasq, Unbound, and RPZ.
+  * Customizable output formatting (`-o` / `--output`) including Plain, HOSTS, Adblock, DNSMasq, Unbound, RPZ, RouteDNS, Squid, or ALL formats generated simultaneously into a specific directory (`--all-dir`). 
+  * **Dual-Pass Generation:** When combined with `--topnlist` and `-o all`, generates both full and Top-N constrained outputs dynamically across two output passes into the target directory.
   * Save original downloaded feeds via the `-w` / `--work` parameter and sort outputs via the `--sort` parameter (`domain`, `alphabetically`, `tld`).
   * Suppresses output file creation if the resulting payload is empty.
+  * Exception for `hosts` formatting: The original domains are strictly preserved (no subdomain deduplication) to ensure proper and explicit local IP routing.
   
   *(Note: This is the only tool that takes mandatory command-line arguments instead of just processing input from STDIN. See [clean-dom-manual.md](https://github.com/cbuijs/aggrip/blob/master/clean-dom-manual.md) for advanced usage).*
 
@@ -96,14 +98,14 @@ Just `cat` some messy data through it, chain them in your Unix pipelines, and ha
   *Note: Significantly faster execution for massive blocklists, but consumes more RAM. Identical command-line arguments.*
 
 * **`domsort.py`**
-  Reads STDIN, identifies logical document sections based on non-domain text (such as comments or blank lines), and strictly validates and sorts domains from the root level down (tree-wise/TLD-first) *within* those sections. Perfectly preserves the original document layout. Supports a `-l` / `--less-strict` flag to permit underscores (`_`) and asterisks (`*`) in domains (e.g., wildcards or SRV records) without disrupting the alphabetical sort order. Additionally supports standard A-Z sorting via the `-a` / `--alphabetical` flag and descending sort order via the `-r` / `--reverse` flag.
+  Reads STDIN, identifies logical document sections based on non-domain text (such as comments or blank lines), and strictly validates and sorts domains from the root level down (tree-wise/TLD-first) *within* those sections. Perfectly preserves the original document layout, guaranteeing that generated log comments stay explicitly attached to their targets. Supports a `-l` / `--less-strict` flag to permit underscores (`_`) and asterisks (`*`) in domains (e.g., wildcards or SRV records) without disrupting the alphabetical sort order. Additionally supports standard A-Z sorting via the `-a` / `--alphabetical` flag and descending sort order via the `-r` / `--reverse` flag.
 
 * **`domsort2.py`**
   Performs the exact same segmented layout-preserving domain sort and optional parameter support (`-l` / `--less-strict`, `-a` / `--alphabetical`, `-r` / `--reverse`) as `domsort.py`, but utilizes high-speed bulk memory reads, fast-path text skipping, and segmented array sorting. 
   *Note: Faster execution but requires more memory.*
 
 * **`getdom.py`**
-  A powerful extraction tool that acts as a domain-aware `grep`. It reads text from standard input (plain lists, HOSTS formats, Adblock feeds, or URLs) and extracts valid DNS domains while discarding garbage text, IP addresses, and comments. Supports a `-a` / `--allow` flag to exclusively extract adblock/adguard "allowlisted" domains (e.g., rules starting with `@@` or isolated exceptions within `$denyallow` modifiers). Also supports a `-l` / `--less-strict` flag to permit underscores (`_`) and asterisks (`*`) for extracting wildcards or SRV records. Using the `-o` / `--output` parameter, the extracted domains can be formatted on the fly as `plain` (default), `adblock` (dynamically outputs `||domain^` or `@@||domain^` based on the `-a` flag), or `hosts` (prepends `0.0.0.0`). 
+  A powerful extraction tool that acts as a domain-aware `grep`. It reads text from standard input (plain lists, HOSTS formats, Adblock feeds, RouteDNS, Squid, or URLs) and extracts valid DNS domains while discarding garbage text, IP addresses, and comments. Supports a `-a` / `--allow` flag to exclusively extract adblock/adguard "allowlisted" domains (e.g., rules starting with `@@` or isolated exceptions within `$denyallow` modifiers). Also supports a `-l` / `--less-strict` flag to permit underscores (`_`) and asterisks (`*`) for extracting wildcards or SRV records. Using the `-o` / `--output` parameter, the extracted domains can be formatted on the fly as `plain` (default), `adblock` (dynamically outputs `||domain^` or `@@||domain^` based on the `-a` flag), or `hosts` (prepends `0.0.0.0`). 
 
 * **`getdom2.py`**
   Performs the exact same domain extraction, syntax routing, and customizable output formatting (`-o`) as `getdom.py`, but utilizes high-speed bulk memory ingestion and unified output buffering to dramatically speed up scanning across large datasets.
@@ -141,8 +143,9 @@ With the exception of `clean-dom.py`, these tools do NOT need mandatory command-
     ./clean-dom.py --blocklist bl1.txt [https://example.com/bl2.txt](https://example.com/bl2.txt) \
                    [--allowlist al1.txt] \
                    [--topnlist top1.txt] \
-                   [-i {domain,hosts,adblock}] \
-                   [-o {domain,hosts,adblock,dnsmasq,unbound,rpz}] \
+                   [-i {domain,hosts,adblock,routedns,squid}] \
+                   [-o {all,domain,hosts,adblock,dnsmasq,unbound,rpz,routedns,squid}] \
+                   [--all-dir /path/to/output_dir] \
                    [--sort {domain,alphabetically,tld}] \
                    [-w /path/to/workdir] \
                    [--out-blocklist out_bl.txt] \
