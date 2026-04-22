@@ -2,14 +2,17 @@
 '''
 ==========================================================================
  Filename: clean-ip2.py
- Version: 0.10
- Date: 2026-04-22 13:34 CEST
+ Version: 0.15
+ Date: 2026-04-22 15:30 CEST
  Changes:
- - v0.10 (2026-04-22): Initial clean-ip2.py release. Fast bulk memory variant.
+ - v0.15 (2026-04-22): Fixed TypeError during final subnet collapse of mixed IPv4/IPv6 blocks.
+ - v0.14 (2026-04-22): Added IP-aware sorting lambda to safely process mixed IPv4/IPv6 lists and force IPv4 output first.
+ - v0.13 (2026-04-22): Moved punch-hole comments inline directly between the fragmented CIDR blocks.
  Description: Enterprise-grade IP blocklist optimizer. Uses bulk reads and 
               string buffer logic to maximize aggregation throughput.
               Cross-references against allowlists, collapses redundant 
-              subnets, and exports directly to firewall-ready configurations.
+              subnets, mathematically excludes exceptions (punch-holing),
+              and exports directly to firewall-ready configurations.
 ==========================================================================
 '''
 
@@ -148,20 +151,21 @@ def main():
     collapsed_blocks = list(ipaddress.collapse_addresses(blocks_v4)) + list(ipaddress.collapse_addresses(blocks_v6))
     collapsed_allows = list(ipaddress.collapse_addresses(allows_v4)) + list(ipaddress.collapse_addresses(allows_v6))
 
-    if v: log_msg("--- Stage 4: Cross-Referencing & Optimizing ---", v)
+    if v: log_msg("--- Stage 4: Cross-Referencing & Punch-Holing ---", v)
     
-    final_blocks = []
+    filtered_blocks = []
     used_allows = set()
     removed_log_general = []
-    removed_log_parent_blocked = []
+    punched_holes = []
 
     stats_allowlisted = 0
-    stats_allow_ignored = 0
+    stats_holes_punched = 0
 
+    # Pass 1: Total Eclipse (Remove blocks completely covered by an allowlist subnet)
     for block in collapsed_blocks:
         is_allowed = False
         for allow in collapsed_allows:
-            if block.subnet_of(allow):
+            if block.version == allow.version and block.subnet_of(allow):
                 used_allows.add(allow)
                 is_allowed = True
                 if not args.suppress_comments:
@@ -169,22 +173,39 @@ def main():
                 stats_allowlisted += 1
                 break
         if not is_allowed:
-            final_blocks.append(block)
+            filtered_blocks.append(block)
+
+    # Pass 2: Mathematical Hole-Punching (Exclude allowed subsets from blocked supersets)
+    final_blocks = []
+    for block in filtered_blocks:
+        current_pieces = [block]
+        for allow in collapsed_allows:
+            if allow.version != block.version:
+                continue
+            
+            next_pieces = []
+            for piece in current_pieces:
+                if allow.subnet_of(piece):
+                    used_allows.add(allow)
+                    stats_holes_punched += 1
+                    if not args.suppress_comments:
+                        punched_holes.append((allow, block))
+                    next_pieces.extend(list(piece.address_exclude(allow)))
+                else:
+                    next_pieces.append(piece)
+            current_pieces = next_pieces
+        
+        final_blocks.extend(current_pieces)
+
+    # Final cleanup of the resulting fragmented blocks (split by version to avoid TypeErrors)
+    fb_v4 = [n for n in final_blocks if n.version == 4]
+    fb_v6 = [n for n in final_blocks if n.version == 6]
+    final_blocks = list(ipaddress.collapse_addresses(fb_v4)) + list(ipaddress.collapse_addresses(fb_v6))
 
     final_allows = []
     removed_log_unused_allows = []
 
     for allow in collapsed_allows:
-        is_blocked = False
-        for block in final_blocks:
-            if allow.subnet_of(block):
-                is_blocked = True
-                used_allows.add(allow)
-                if not args.suppress_comments:
-                    removed_log_parent_blocked.append(f"# {allow} - Allowlisted exception but encapsulated by parent block {block}")
-                stats_allow_ignored += 1
-                break
-        
         if not args.optimize_allowlist or allow in used_allows:
             final_allows.append(allow)
         else:
@@ -204,16 +225,29 @@ def main():
     out_buffer_a = []
 
     if out_a:
-        out_buffer_a.extend(f"{format_allow_network(n, args.output)}" for n in sorted(final_allows))
+        # Strict IP-aware sort guarantees IPv4 first, then IPv6
+        out_buffer_a.extend(f"{format_allow_network(n, args.output)}" for n in sorted(final_allows, key=lambda x: (x.version, int(x.network_address), x.prefixlen)))
         out_a.write('\n'.join(out_buffer_a) + '\n')
         out_a.close()
 
+    # Output General Comments at the top
     if not args.suppress_comments:
         out_buffer_b.extend(removed_log_general)
-        out_buffer_b.extend(removed_log_parent_blocked)
         out_buffer_b.extend(removed_log_unused_allows)
 
-    out_buffer_b.extend(f"{format_network(n, args.output)}" for n in sorted(final_blocks))
+    # Combine blocks and punch-hole comments into an inline sortable stream
+    inline_stream = []
+    for net in final_blocks:
+        inline_stream.append((net.version, int(net.network_address), net.prefixlen, 1, format_network(net, args.output)))
+        
+    for allow, orig_block in punched_holes:
+        comment = f"# {allow} - Punched mathematical exception hole inside {orig_block}"
+        inline_stream.append((allow.version, int(allow.network_address), allow.prefixlen, 0, comment))
+
+    # This sort guarantees: IPv4 before IPv6 -> Ascending Subnets -> Comments flush exactly before the punched hole block
+    inline_stream.sort(key=lambda x: (x[0], x[1], x[2], x[3]))
+    
+    out_buffer_b.extend(item[4] for item in inline_stream)
     
     if out_buffer_b:
         out_b.write('\n'.join(out_buffer_b) + '\n')
@@ -226,10 +260,11 @@ def main():
         log_msg(f"Total Blocks Parsed         : {len(raw_blocks):,}", v)
         log_msg(f"Collapsed Block Subnets     : {len(collapsed_blocks):,}", v)
         log_msg(f"Removed (Allowlisted)       : {stats_allowlisted:,}", v)
-        log_msg(f"Ignored Allows (Blocked)    : {stats_allow_ignored:,}", v)
+        log_msg(f"Holes Punched (Exclusions)  : {stats_holes_punched:,}", v)
         log_msg("----------------------------------------", v)
         log_msg(f"Final Active Block CIDRs    : {len(final_blocks):,}", v)
-        log_msg(f"Exported Allowlist CIDRs    : {len(final_allows):,}", v)
+        if args.out_allowlist:
+            log_msg(f"Exported Allowlist CIDRs    : {len(final_allows):,}", v)
         log_msg("========================================", v)
 
 if __name__ == "__main__":

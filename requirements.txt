@@ -1,12 +1,15 @@
 # ==========================================================================
 # Filename: requirements.txt
-# Version: 1.1
-# Date: 2026-04-07 16:00 CEST
-# Description: Pip dependencies required for the Aggrip suite. Most tools 
-#              use Python 3 standard libraries (e.g., ipaddress, re, sys), 
-#              but specific CIDR merging tasks require external modules.
+# Version: 1.2
+# Date: 2026-04-22 13:38 CEST
+# Description: Pip dependencies required for the Aggrip suite.
+#              Most tools use Python 3 standard libraries (e.g., ipaddress, 
+#              re, sys, urllib), but specific CIDR merging tasks require 
+#              external modules.
 #
 # Changes/Fixes:
+# - v1.2 (2026-04-22): Verified requirements for clean-ip tool additions 
+#                      (relies entirely on native ipaddress; no new deps).
 # - v1.1 (2026-04-07): Added standardized file header, verified dependency list.
 # - v1.0 (2026-04-01): Initial requirements specification.
 # ==========================================================================

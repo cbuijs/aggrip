@@ -2,13 +2,16 @@
 '''
 ==========================================================================
  Filename: clean-ip.py
- Version: 0.10
- Date: 2026-04-22 13:34 CEST
+ Version: 0.15
+ Date: 2026-04-22 15:30 CEST
  Changes:
- - v0.10 (2026-04-22): Initial clean-ip.py release. Feature-twin to clean-dom.
+ - v0.15 (2026-04-22): Fixed TypeError during final subnet collapse of mixed IPv4/IPv6 blocks.
+ - v0.14 (2026-04-22): Added IP-aware sorting lambda to safely process mixed IPv4/IPv6 lists and force IPv4 output first.
+ - v0.13 (2026-04-22): Moved punch-hole comments inline directly between the fragmented CIDR blocks.
  Description: Optimizes IP blocklists by aggregating IPs, CIDRs, and ranges.
               Cross-references against allowlists, collapses redundant 
-              subnets, and exports directly to firewall-ready configurations.
+              subnets, mathematically excludes exceptions (punch-holing),
+              and exports directly to firewall-ready configurations.
 ==========================================================================
 '''
 
@@ -53,7 +56,6 @@ def read_ips(source, is_verbose, strict):
                 net = ipaddress.ip_network(token, strict=strict)
                 is_range = False
 
-                # Lookahead for standard Space or Dash-separated IP ranges
                 if ('/' not in token) and (i + 1 < len(tokens)):
                     offset = 2 if tokens[i+1] == '-' else 1
                     if i + offset < len(tokens):
@@ -79,16 +81,11 @@ def read_ips(source, is_verbose, strict):
 
 def format_network(net, fmt):
     """Formats the IP network block into the requested output syntax."""
-    if fmt == "cidr":
-        return str(net)
-    elif fmt == "range":
-        return f"{net[0]} - {net[-1]}"
-    elif fmt == "cisco":
-        return f"deny ip {net.network_address} {net.hostmask} any" if fmt == "cisco" else ""
-    elif fmt == "iptables":
-        return f"-A INPUT -s {net} -j DROP"
-    elif fmt == "mikrotik":
-        return f"add address={net} list=blocklist"
+    if fmt == "cidr": return str(net)
+    elif fmt == "range": return f"{net[0]} - {net[-1]}"
+    elif fmt == "cisco": return f"deny ip {net.network_address} {net.hostmask} any"
+    elif fmt == "iptables": return f"-A INPUT -s {net} -j DROP"
+    elif fmt == "mikrotik": return f"add address={net} list=blocklist"
     elif fmt == "padded":
         if net.version == 4:
             parts = str(net.network_address).split('.')
@@ -100,12 +97,9 @@ def format_network(net, fmt):
 
 def format_allow_network(net, fmt):
     """Formats allowlist output syntax."""
-    if fmt == "cisco":
-        return f"permit ip {net.network_address} {net.hostmask} any"
-    elif fmt == "iptables":
-        return f"-A INPUT -s {net} -j ACCEPT"
-    elif fmt == "mikrotik":
-        return f"add address={net} list=allowlist"
+    if fmt == "cisco": return f"permit ip {net.network_address} {net.hostmask} any"
+    elif fmt == "iptables": return f"-A INPUT -s {net} -j ACCEPT"
+    elif fmt == "mikrotik": return f"add address={net} list=allowlist"
     return format_network(net, fmt)
 
 def main():
@@ -115,7 +109,7 @@ def main():
     parser.add_argument("-o", "--output", choices=["cidr", "range", "cisco", "iptables", "mikrotik", "padded"], default="cidr", help="Output format")
     parser.add_argument("--out-blocklist", help="Optional file path to write the blocklist output (default: STDOUT)")
     parser.add_argument("--out-allowlist", help="Optional file path to write the allowlist output")
-    parser.add_argument("--optimize-allowlist", action="store_true", help="Drop unused allowlist entries that do not match any blocked targets")
+    parser.add_argument("--optimize-allowlist", action="store_true", help="Drop unused allowlist entries")
     parser.add_argument("--suppress-comments", action="store_true", help="Suppress the audit log of removed IPs")
     parser.add_argument("-s", "--strict", action="store_true", help="Reject CIDRs with dirty host bits instead of truncating")
     parser.add_argument("-v", "--verbose", action="store_true", help="Show progress and statistics on STDERR")
@@ -148,20 +142,21 @@ def main():
     collapsed_blocks = list(ipaddress.collapse_addresses(blocks_v4)) + list(ipaddress.collapse_addresses(blocks_v6))
     collapsed_allows = list(ipaddress.collapse_addresses(allows_v4)) + list(ipaddress.collapse_addresses(allows_v6))
 
-    if v: log_msg("--- Stage 4: Cross-Referencing & Optimizing ---", v)
+    if v: log_msg("--- Stage 4: Cross-Referencing & Punch-Holing ---", v)
     
-    final_blocks = []
+    filtered_blocks = []
     used_allows = set()
     removed_log_general = []
-    removed_log_parent_blocked = []
+    punched_holes = []
 
     stats_allowlisted = 0
-    stats_allow_ignored = 0
+    stats_holes_punched = 0
 
+    # Pass 1: Total Eclipse (Remove blocks completely covered by an allowlist subnet)
     for block in collapsed_blocks:
         is_allowed = False
         for allow in collapsed_allows:
-            if block.subnet_of(allow):
+            if block.version == allow.version and block.subnet_of(allow):
                 used_allows.add(allow)
                 is_allowed = True
                 if not args.suppress_comments:
@@ -169,22 +164,39 @@ def main():
                 stats_allowlisted += 1
                 break
         if not is_allowed:
-            final_blocks.append(block)
+            filtered_blocks.append(block)
+
+    # Pass 2: Mathematical Hole-Punching (Exclude allowed subsets from blocked supersets)
+    final_blocks = []
+    for block in filtered_blocks:
+        current_pieces = [block]
+        for allow in collapsed_allows:
+            if allow.version != block.version:
+                continue
+            
+            next_pieces = []
+            for piece in current_pieces:
+                if allow.subnet_of(piece):
+                    used_allows.add(allow)
+                    stats_holes_punched += 1
+                    if not args.suppress_comments:
+                        punched_holes.append((allow, block))
+                    next_pieces.extend(list(piece.address_exclude(allow)))
+                else:
+                    next_pieces.append(piece)
+            current_pieces = next_pieces
+        
+        final_blocks.extend(current_pieces)
+
+    # Final cleanup of the resulting fragmented blocks (split by version to avoid TypeErrors)
+    fb_v4 = [n for n in final_blocks if n.version == 4]
+    fb_v6 = [n for n in final_blocks if n.version == 6]
+    final_blocks = list(ipaddress.collapse_addresses(fb_v4)) + list(ipaddress.collapse_addresses(fb_v6))
 
     final_allows = []
     removed_log_unused_allows = []
 
     for allow in collapsed_allows:
-        is_blocked = False
-        for block in final_blocks:
-            if allow.subnet_of(block):
-                is_blocked = True
-                used_allows.add(allow)
-                if not args.suppress_comments:
-                    removed_log_parent_blocked.append(f"# {allow} - Allowlisted exception but encapsulated by parent block {block}")
-                stats_allow_ignored += 1
-                break
-        
         if not args.optimize_allowlist or allow in used_allows:
             final_allows.append(allow)
         else:
@@ -201,21 +213,35 @@ def main():
         sys.exit(1)
 
     if out_a:
-        for net in sorted(final_allows):
+        # Strict IP-aware sort guarantees IPv4 first, then IPv6
+        for net in sorted(final_allows, key=lambda x: (x.version, int(x.network_address), x.prefixlen)):
             out_a.write(f"{format_allow_network(net, args.output)}\n")
         out_a.close()
 
-    output_items = []
+    # Output General Comments at the top
+    output_top_comments = []
     if not args.suppress_comments:
-        output_items.extend(removed_log_general)
-        output_items.extend(removed_log_parent_blocked)
-        output_items.extend(removed_log_unused_allows)
+        output_top_comments.extend(removed_log_general)
+        output_top_comments.extend(removed_log_unused_allows)
         
-    for item in output_items:
+    for item in output_top_comments:
         out_b.write(f"{item}\n")
 
-    for net in sorted(final_blocks):
-        out_b.write(f"{format_network(net, args.output)}\n")
+    # Combine blocks and punch-hole comments into an inline sortable stream
+    inline_stream = []
+    for net in final_blocks:
+        # Tuple format: (IP Version, Network Integer, Prefix, Is_Block, String)
+        inline_stream.append((net.version, int(net.network_address), net.prefixlen, 1, format_network(net, args.output)))
+        
+    for allow, orig_block in punched_holes:
+        comment = f"# {allow} - Punched mathematical exception hole inside {orig_block}"
+        inline_stream.append((allow.version, int(allow.network_address), allow.prefixlen, 0, comment))
+
+    # This sort guarantees: IPv4 before IPv6 -> Ascending Subnets -> Comments flush exactly before the punched hole block
+    inline_stream.sort(key=lambda x: (x[0], x[1], x[2], x[3]))
+    
+    for item in inline_stream:
+        out_b.write(f"{item[4]}\n")
 
     if args.out_blocklist:
         out_b.close()
@@ -225,10 +251,11 @@ def main():
         log_msg(f"Total Blocks Parsed         : {len(raw_blocks):,}", v)
         log_msg(f"Collapsed Block Subnets     : {len(collapsed_blocks):,}", v)
         log_msg(f"Removed (Allowlisted)       : {stats_allowlisted:,}", v)
-        log_msg(f"Ignored Allows (Blocked)    : {stats_allow_ignored:,}", v)
+        log_msg(f"Holes Punched (Exclusions)  : {stats_holes_punched:,}", v)
         log_msg("----------------------------------------", v)
         log_msg(f"Final Active Block CIDRs    : {len(final_blocks):,}", v)
-        log_msg(f"Exported Allowlist CIDRs    : {len(final_allows):,}", v)
+        if args.out_allowlist:
+            log_msg(f"Exported Allowlist CIDRs    : {len(final_allows):,}", v)
         log_msg("========================================", v)
 
 if __name__ == "__main__":

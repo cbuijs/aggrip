@@ -1,3 +1,12 @@
+# ==========================================================================
+# Filename: README.md
+# Version: 1.1
+# Date: 2026-04-22 13:38 CEST
+# Changes:
+# - v1.1 (2026-04-22): Added documentation for clean-ip.py and clean-ip2.py.
+# - v1.0 (2026-04-01): Initial documentation.
+# ==========================================================================
+
 # Aggrip  - IP, CIDR and DNS Domain Utilities
 
 A collection of highly optimized Python 3 command-line utilities for processing, aggregating, and sorting IP addresses, CIDR networks, and DNS domain lists. These tools are designed for high-performance pipeline operations in Unix-like environments.
@@ -44,6 +53,14 @@ Just `cat` some messy data through it, chain them in your Unix pipelines, and ha
 * **`aggrip-asn2.py`**
   Performs the exact same composite identifier aggregation as `aggrip-asn.py`, but utilizes high-speed bulk memory reads, pre-computed integer metadata sorting, and tuple mapping to execute significantly faster. 
   *Note: Faster execution but requires more memory.*
+
+* **`clean-ip.py`**
+  A comprehensive, enterprise-grade optimization script for IP blocklists. It cross-references blocklists against allowlists, seamlessly aggregates overlapping subnets, optimizes allowlists on the fly, and exports to firewall-ready formats (CIDR, Range, Cisco ACL, iptables, MikroTik, padded). Supports local files and URLs.
+  *(See clean-ip-manual.md for advanced usage).*
+
+* **`clean-ip2.py`**
+  Performs the exact same IP optimization, cross-referencing, and formatting as `clean-ip.py`, but utilizes high-speed bulk memory reads and string buffering to maximize throughput on massive datasets.
+  *Note: Significantly faster execution but consumes more RAM. Identical command-line arguments.*
 
 * **`getip.py`**
   A powerful extraction tool that acts as an IP-aware `grep`. It reads input and explicitly targets valid IP Addresses, IP-Ranges (both space and dash-separated), and CIDRs while automatically discarding garbage text. Invalid CIDR host bits are auto-truncated by default, but can be strictly rejected by using the `-s` / `--strict` parameter. Defaults to strictly validating the beginning of a line, but supports an "anywhere" (`-a` / `--anywhere`) deep-scan parameter. Outputs a strictly consolidated, deduplicated, and IP-sorted list of native CIDRs.
@@ -92,7 +109,7 @@ Just `cat` some messy data through it, chain them in your Unix pipelines, and ha
   * Suppresses output file creation if the resulting payload is empty.
   * Exception for `hosts` formatting: The original domains are strictly preserved (no subdomain deduplication) to ensure proper and explicit local IP routing.
   
-  *(Note: This is the only tool that takes mandatory command-line arguments instead of just processing input from STDIN. See [clean-dom-manual.md](https://github.com/cbuijs/aggrip/blob/master/clean-dom-manual.md) for advanced usage).*
+  *(Note: This is the only tool that takes mandatory command-line arguments instead of just processing input from STDIN. See clean-dom-manual.md for advanced usage).*
 
 * **`clean-dom2.py`**
   Performs the exact same DNS optimization, routing, formatting, and deduplication as `clean-dom.py`, but utilizes high-speed bulk memory reads and a reverse-string `O(N log N)` sorting algorithm.
@@ -123,7 +140,7 @@ Just `cat` some messy data through it, chain them in your Unix pipelines, and ha
 
 ## Usage Instructions
 
-With the exception of `clean-dom.py`, these tools do NOT need mandatory command-line file parameters. They are designed to be chained together using standard input (`STDIN`) and standard output (`STDOUT`) based on common/best practices.
+With the exception of `clean-dom.py` and `clean-ip.py`, these tools do NOT need mandatory command-line file parameters. They are designed to be chained together using standard input (`STDIN`) and standard output (`STDOUT`) based on common/best practices.
 
 **NOTE:** You can fire up any of the scripts with `-h` or `--help` to get detailed information on available command-line parameters.
 
@@ -154,6 +171,18 @@ With the exception of `clean-dom.py`, these tools do NOT need mandatory command-
                    [--optimize-allowlist] \
                    [--suppress-comments] \
                    [-v | --verbose]
+
+### For `clean-ip.py`:
+
+    ./clean-ip.py --blocklist ips.txt bad_ranges.txt \
+                  [--allowlist whitelist.txt] \
+                  [-o {cidr,range,cisco,iptables,mikrotik,padded}] \
+                  [--out-blocklist out_bl.txt] \
+                  [--out-allowlist out_al.txt] \
+                  [--optimize-allowlist] \
+                  [--suppress-comments] \
+                  [-s | --strict] \
+                  [-v | --verbose]
 
 *Use the `-v` or `--verbose` flag to print loading progress, processing stages, and a final deduplication statistics summary to STDERR.*
 
