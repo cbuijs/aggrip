@@ -14,6 +14,14 @@ Just `cat` some messy data through it, chain them in your Unix pipelines, and ha
 
 ---
 
+## Detailed Manuals
+
+For deep-dive instructions, logic explanations, and comprehensive format coverage, refer to the included manuals:
+* **[clean-ip-manual.md](clean-ip-manual.md)** - Comprehensive documentation for IP/CIDR blocklist cross-referencing, punch-holing, and exporting.
+* **[clean-dom-manual.md](clean-dom-manual.md)** - Comprehensive documentation for DNS blocklist cross-referencing, modifier routing, Top-N filtering, and exporting.
+
+---
+
 ## Tool Overview
 
 ### Categorization & Analysis Tools
@@ -39,7 +47,7 @@ Just `cat` some messy data through it, chain them in your Unix pipelines, and ha
   Performs the exact same composite identifier aggregation as `aggrip-asn.py`, but utilizes high-speed bulk memory reads.
 
 * **`clean-ip.py`**
-  A comprehensive, enterprise-grade optimization script for IP blocklists. It cross-references blocklists against allowlists, seamlessly aggregates overlapping subnets, optimizes allowlists on the fly, and exports to firewall-ready formats. **Supports CIDR, Range, Netmask, Cisco ACL, iptables, MikroTik, and padded notation.** Automatically processes mixed delimiters for IP-Ranges on input (e.g. `IP-IP`, `IP - IP`, or `IP IP`).
+  A comprehensive, enterprise-grade optimization script for IP blocklists. It cross-references blocklists against allowlists, seamlessly aggregates overlapping subnets, mathematically punches holes for IP exceptions, optimizes allowlists on the fly, and exports to firewall-ready formats. **Supports CIDR, Range, Netmask, Cisco ACL, iptables, MikroTik, and padded notation.** Automatically processes mixed delimiters for IP-Ranges on input (e.g. `IP-IP`, `IP - IP`, or `IP IP`).
 
 * **`clean-ip2.py`**
   Performs the exact same IP optimization, cross-referencing, and formatting as `clean-ip.py`, but utilizes high-speed bulk memory reads and string buffering to maximize throughput on massive datasets.
@@ -71,10 +79,10 @@ Just `cat` some messy data through it, chain them in your Unix pipelines, and ha
 ### DNS Domain Tools
 
 * **`clean-dom.py`**
-  A comprehensive, enterprise-grade optimization script for DNS blocklists. 
+  A comprehensive, enterprise-grade optimization script for DNS blocklists. It ingests massive lists, cross-references against allowlists, safely deduplicates redundant subdomains using O(N log N) depth-sorting, optimizes allowlists on the fly, dynamically routes Adblock modifiers like `$denyallow`, handles Unicode/Punycode conversions, and exports optimized results. **Supports Domain, HOSTS, Adblock, DNSMasq, Unbound, RPZ, RouteDNS, and Squid formats.** Can output all formats simultaneously and process Top-N filtered lists.
 
 * **`clean-dom2.py`**
-  Performs the exact same DNS optimization utilizing bulk memory.
+  Performs the exact same DNS optimization, deduplication, and formatting as `clean-dom.py`, but utilizes high-speed bulk memory reads and instant file format heuristics to maximize throughput on massive datasets.
 
 * **`domsort.py`**
   Segmented layout-preserving domain sort.
@@ -121,6 +129,24 @@ Just `cat` some messy data through it, chain them in your Unix pipelines, and ha
 
 *Use the `--range-sep` parameter when compiling ranges to dictate output format spacings (IP-IP or IP IP).*
 *Use the `-v` or `--verbose` flag to print loading progress, processing stages, and a final deduplication statistics summary to STDERR.*
+
+### For `clean-dom.py` and `clean-dom2.py`:
+
+    ./clean-dom.py --blocklist ads.txt tracking.txt \
+                   [--allowlist whitelist.txt] \
+                   [--topnlist top-1m.csv] \
+                   [-i {domain,hosts,adblock,routedns,squid}] \
+                   [-o {all,domain,hosts,adblock,dnsmasq,unbound,rpz,routedns,squid}] \
+                   [--all-dir /path/to/exports/] \
+                   [--sort {domain,alphabetically,tld}] \
+                   [--out-blocklist out_bl.txt] \
+                   [--out-allowlist out_al.txt] \
+                   [--optimize-allowlist] \
+                   [--suppress-comments] \
+                   [-v | --verbose]
+
+*Use the `-o all` parameter combined with `--all-dir` to dynamically generate all supported output formats in a single pass.*
+*See [clean-dom-manual.md](clean-dom-manual.md) for more details.*
 
 ---
 
