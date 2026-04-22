@@ -2,9 +2,10 @@
 '''
 ==========================================================================
  Filename: clean-ip.py
- Version: 0.16
+ Version: 0.17
  Date: 2026-04-22 16:30 CEST
  Changes:
+ - v0.17 (2026-04-22): Added universal input parsing for padded IPs, Cisco ACLs, iptables, and MikroTik formats.
  - v0.16 (2026-04-22): Added netmask output/input format, optimized range output to remove whitespaces, and added --range-sep param.
  - v0.15 (2026-04-22): Fixed TypeError during final subnet collapse of mixed IPv4/IPv6 blocks.
  - v0.14 (2026-04-22): Added IP-aware sorting lambda to safely process mixed IPv4/IPv6 lists and force IPv4 output first.
@@ -18,7 +19,7 @@
 
 import argparse
 import sys
-import os
+import re
 import ipaddress
 import urllib.request
 
@@ -40,7 +41,7 @@ def get_lines(source):
                 yield line
 
 def read_ips(source, is_verbose, strict):
-    """Reads a source file, parsing IPs, CIDRs, and IP-Ranges (including native ipaddress netmask support)."""
+    """Reads a source file, parsing IPs, CIDRs, IP-Ranges, padded IPs, and firewall configurations."""
     networks = []
     log_msg(f"Loading data from: {source}", is_verbose)
     
@@ -49,28 +50,47 @@ def read_ips(source, is_verbose, strict):
         if not line or line.startswith('!'):
             continue
             
-        # Normalizing spaces and dashes to easily tokenize IP ranges formats like IP-IP, IP - IP, or IP IP.
+        # Strip mikrotik notation to extract native IP format
+        line = line.replace('address=', ' ')
+        # Normalizing spaces and dashes to easily tokenize IP ranges formats
         tokens = line.replace('-', ' - ').split()
         i = 0
         while i < len(tokens):
             token = tokens[i]
+            
+            # Normalize zero-padded IPv4 octets to prevent ValueErrors
+            if '.' in token and ':' not in token:
+                token = re.sub(r'\b0+(\d)', r'\1', token)
+                
             try:
                 # Natively supports both CIDR notation and Netmask notation via Python's ipaddress library
                 net = ipaddress.ip_network(token, strict=strict)
                 is_range = False
 
-                # Handle extraction of IP-Range syntax logic
+                # Handle extraction of IP-Range syntax logic and Cisco Wildcards
                 if ('/' not in token) and (i + 1 < len(tokens)):
                     offset = 2 if tokens[i+1] == '-' else 1
                     if i + offset < len(tokens):
+                        next_token = tokens[i+offset]
+                        
+                        if '.' in next_token and ':' not in next_token:
+                            next_token = re.sub(r'\b0+(\d)', r'\1', next_token)
+                            
                         try:
-                            end_ip = ipaddress.ip_address(tokens[i+offset])
+                            end_ip = ipaddress.ip_address(next_token)
                             start_ip = ipaddress.ip_address(token)
                             if start_ip.version == end_ip.version:
-                                start, end = min(start_ip, end_ip), max(start_ip, end_ip)
-                                networks.extend(list(ipaddress.summarize_address_range(start, end)))
-                                i += (offset + 1)
-                                is_range = True
+                                # Process Cisco Wildcard mask
+                                if start_ip.version == 4 and next_token.startswith('0.'):
+                                    netmask = '.'.join(str(255 - int(x)) for x in next_token.split('.'))
+                                    networks.append(ipaddress.ip_network(f"{token}/{netmask}", strict=strict))
+                                    i += (offset + 1)
+                                    is_range = True
+                                else:
+                                    start, end = min(start_ip, end_ip), max(start_ip, end_ip)
+                                    networks.extend(list(ipaddress.summarize_address_range(start, end)))
+                                    i += (offset + 1)
+                                    is_range = True
                         except ValueError:
                             pass
                 
@@ -79,6 +99,7 @@ def read_ips(source, is_verbose, strict):
                     i += 1
 
             except ValueError:
+                # Discards iptables boilerplate (-A, INPUT, -j DROP) safely
                 i += 1
                 
     return networks

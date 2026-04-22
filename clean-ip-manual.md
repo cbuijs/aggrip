@@ -12,7 +12,7 @@
 
 ## Core Features
 
-* **Multi-Format Ingestion:** Seamlessly reads plain IP addresses, standard CIDR notation (e.g., `192.168.1.0/24`), Netmask notation (e.g., `192.168.1.0/255.255.255.0`), and various IP-Range syntaxes. Automatically tokenizes ranges separated by dashes or spaces (`IP-IP`, `IP - IP`, or `IP IP`).
+* **Multi-Format Ingestion:** Seamlessly reads plain IP addresses, standard CIDR notation (e.g., `192.168.1.0/24`), Netmask notation (e.g., `192.168.1.0/255.255.255.0`), IP-Ranges, **Cisco ACLs**, **iptables rules**, **MikroTik formats**, and **Padded IPs** (e.g., `010.000.000.000`). Automatically tokenizes ranges separated by dashes or spaces (`IP-IP`, `IP - IP`, or `IP IP`) and seamlessly converts Cisco wildcard masks on the fly.
 * **Subnet Collapsing:** Automatically merges overlapping subnets and contiguous IP blocks into the most mathematically efficient CIDR supernets, natively supporting both IPv4 and IPv6 simultaneously.
 * **Mathematical Hole-Punching:** If an allowlisted subnet falls completely inside a larger blocklisted subnet, the script mathematically fractures the larger blocklist to strictly exclude the allowlisted IP space without losing coverage of the rest of the block.
 * **Allowlist Optimization:** Optionally strips out allowlisted entries that do not actively match or fracture any targeted blocklist items, keeping exported exception lists perfectly lean.
@@ -49,6 +49,7 @@ When IPs are ingested, `clean-ip.py` normalizes them into standard network objec
 1. `192.168.1.1` and `192.168.1.2` are merged.
 2. Contiguous ranges like `10.0.0.0 - 10.0.0.255` are instantly converted to `10.0.0.0/24`.
 3. If an input contains `192.168.1.10/24` (a dirty host bit), it auto-truncates it to `192.168.1.0/24` (unless `--strict` is enforced).
+4. Cisco wildcard masks (`0.0.0.255`) are mathematically inverted and converted back to CIDR blocks.
 
 ### Hole-Punching (Exclusions)
 Unlike domain names where blocking a parent inherently blocks the child, IP subnets work via routing calculations.
