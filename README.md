@@ -2,6 +2,8 @@
 
 A collection of highly optimized Python 3 command-line utilities for processing, aggregating, and sorting IP addresses, CIDR networks, and DNS domain lists. These tools are designed for high-performance pipeline operations in Unix-like environments.
 
+NOTE: Check out [aggrip-go](https://github.com/cbuijs/aggrip-go), the GO version of it that proabbaly will surpase these scripts.
+
 ---
 
 ## INTRO
